@@ -1,0 +1,61 @@
+{
+  "name": "macrotouch",
+  "type": "module",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "nuxt dev",
+    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "build": "nuxt build",
+    "generate": "cross-env NUXT_HASH_ROUTER=true nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "electron:preview": "npm run generate && cross-env NODE_ENV=production electron .",
+    "dist": "npm run generate && electron-builder"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.11.3",
+    "nuxt": "^4.3.1",
+    "vue": "^3.5.28",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.15.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^40.6.0",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9.39.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "postcss-nested": "^7.0.2",
+    "wait-on": "^9.0.4"
+  },
+  "build": {
+    "appId": "com.macrotouch.app",
+    "productName": "MacroTouch",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      ".output/public/**/*"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}
