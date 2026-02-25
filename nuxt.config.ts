@@ -11,7 +11,6 @@ export default defineNuxtConfig({
 
   modules: ['@pinia/nuxt', '@nuxt/eslint'],
 
-
   // Disable SSR — Electron renders client-side only
   ssr: false,
 
