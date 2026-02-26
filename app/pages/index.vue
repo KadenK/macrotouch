@@ -6,4 +6,4 @@
 const title = ref('Hello World')
 </script>
 
-<style></style>
+<style lang="postcss"></style>

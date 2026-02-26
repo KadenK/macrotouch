@@ -23,19 +23,10 @@ export default withNuxt(
   },
   prettierConfig,
   {
-    ignores: [
-      'node_modules/**',
-      'dist/**',
-      '.nuxt/**',
-      '.output/**',
-      'build/**',
-      'android/app/build/**',
-      'ios/App/Pods/**',
-    ],
+    ignores: ['node_modules/**', 'dist/**', '.nuxt/**', '.output/**', 'build/**'],
   },
 ).override('nuxt/vue/rules', {
   rules: {
-    'vue/no-deprecated-slot-attribute': 'off', // Ionic uses its own slot system that looks like the deprecated Vue slot syntax
     'vue/multi-word-component-names': 'off', // Allow single-word component names
   },
 })

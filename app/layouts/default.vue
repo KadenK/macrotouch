@@ -1,16 +1,26 @@
 <template>
   <div>
-    <header>
-      <title>MacroTouch</title>
-      <meta name="description" content="A customizable macro pad for your computer" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <link rel="icon" href="/favicon.ico" />
-    </header>
+    <div class="header">
+      <h1 @click="navigateTo('/')">{{ name }}</h1>
+      <div class="right-buttons">
+        <button @click="navigateTo('/connect')">Connect</button>
+        <button @click="navigateTo('/settings')">Settings</button>
+      </div>
+    </div>
     <slot />
     <footer></footer>
   </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+const name = ref('MacroTouch')
+</script>
 
-<style lang="postcss"></style>
+<style lang="postcss">
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 4rem;
+}
+</style>
