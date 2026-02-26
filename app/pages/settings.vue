@@ -4,4 +4,4 @@
 
 <script lang="ts" setup></script>
 
-<style lang="postcss"></style>
+<style lang="postcss" scoped></style>
