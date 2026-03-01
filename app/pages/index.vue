@@ -1,5 +1,8 @@
 <template>
-  <div>{{ title }}</div>
+  <div>
+    <div>{{ title }}</div>
+    <Macro />
+  </div>
 </template>
 
 <script lang="ts" setup>
