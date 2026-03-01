@@ -1,7 +1,7 @@
 <template>
   <div class="p-4">
-    <h1 class="text-xl font-semibold mb-2">Connect to this server</h1>
-    <p class="opacity-80 mb-4">Scan a QR code to open this server from your phone/computer on the LAN.</p>
+    <h1 class="text-xl font-semibold mb-2">Connect your mobile device to this Computer</h1>
+    <p class="opacity-80 mb-4">Scan a QR code to open your macro board from your phone/computer on the LAN.</p>
 
     <div v-if="loading" class="mb-4">
       <div class="animate-pulse">Loading network interfaces...</div>
@@ -13,7 +13,10 @@
 
     <div v-for="(iface, index) in networkInterfaces" :key="index" class="card">
       <div class="info">
-        <div><b>Interface:</b> {{ iface.name }}</div>
+        <div>
+          <b>Interface:</b> {{ iface.name }}
+          <span v-if="index === 0" class="star" title="Primary interface (recommended)">★</span>
+        </div>
         <div><b>IP:</b> {{ iface.ip }}</div>
         <div>
           <b>URL:</b>
@@ -69,6 +72,14 @@ const { networkInterfaces, qrCodes, loading, error } = useNetwork()
   width: 220px;
   height: 220px;
   display: block;
+}
+
+/* Star styling */
+.star {
+  color: #f5b342; /* gold color */
+  font-size: 1.2em;
+  margin-left: 4px;
+  cursor: default; /* no click action */
 }
 
 @keyframes pulse {
