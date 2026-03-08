@@ -1,16 +1,17 @@
 <template>
-  <div class="p-4">
-    <h1 class="text-xl font-semibold mb-2">Connect your touch device to your computer using your broswer</h1>
-    <div v-if="loading" class="mb-4">
-      <div class="animate-pulse">Loading network interfaces...</div>
+  <div class="network-container">
+    <h1 class="title">Connect your touch device to your computer using your browser</h1>
+
+    <div v-if="loading" class="loading">
+      <div class="pulse">Loading network interfaces...</div>
     </div>
 
-    <div v-else-if="error" class="mb-4 text-red-600">Error: {{ error }}</div>
+    <div v-else-if="error" class="error">Error: {{ error }}</div>
 
-    <div v-else-if="networkInterfaces.length === 0" class="mb-4">No private LAN IPv4 addresses found.</div>
+    <div v-else-if="networkInterfaces.length === 0" class="empty-state">No private LAN IPv4 addresses found.</div>
 
     <div v-for="(iface, index) in networkInterfaces" :key="index" class="card">
-      <div class="info">
+      <div class="card-info">
         <div>
           <b>Interface:</b> {{ iface.name }}
           <span v-if="index === 0" class="star" title="Primary interface (recommended)">★</span>
@@ -26,9 +27,7 @@
 
       <div class="qr">
         <img v-if="qrCodes[iface.url]" :src="qrCodes[iface.url]" :alt="`QR code for ${iface.url}`" loading="lazy" />
-        <div v-else class="opacity-80 flex items-center justify-center" style="width: 220px; height: 220px">
-          Generating QR…
-        </div>
+        <div v-else class="qr-placeholder">Generating QR…</div>
       </div>
     </div>
   </div>
@@ -41,40 +40,52 @@ const { networkInterfaces, qrCodes, loading, error } = useNetwork()
 </script>
 
 <style scoped>
-/* ===== CONTAINER & LAYOUT ===== */
-/* The main container (outer div) */
-.p-4 {
-  padding: 1rem; /* equivalent to 16px */
+/* Container */
+.network-container {
+  padding: 1rem;
   background-color: hsl(0, 0%, 78%);
+  font-family: sans-serif; /* optional fallback */
 }
 
-/* ===== TYPOGRAPHY ===== */
-/* Heading 1 */
-h1 {
-  font-size: 1.5rem; /* text-xl */
-  font-weight: 600; /* font-semibold */
-  margin-bottom: 0.5rem; /* mb-2 */
+/* Title */
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
   text-align: center;
+  color: inherit;
 }
 
-/* Paragraph */
-p {
+/* Loading and pulse animation */
+.loading {
+  margin-bottom: 1rem;
+}
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Error message */
+.error {
+  margin-bottom: 1rem;
+  color: #dc2626; /* red-600 */
+}
+
+/* Empty state */
+.empty-state {
+  margin-bottom: 1rem;
   opacity: 0.8;
-  margin-bottom: 1rem; /* mb-4 */
 }
 
-/* Links */
-a.link {
-  text-decoration: underline;
-  color: #ffffff;
-  transition: color 0.2s ease;
-}
-a.link:hover {
-  color: #2a486d;
-}
-
-/* ===== CARDS ===== */
-/* Individual card container */
+/* Cards */
 .card {
   display: flex;
   gap: 16px;
@@ -85,53 +96,50 @@ a.link:hover {
   padding: 12px;
   margin: 12px 0;
   flex-wrap: wrap;
-  background-color: #969696; /* you can change this */
+  background-color: #969696;
   font-size: 1.5em;
 }
 
 /* Card info section */
-.info {
+.card-info {
   min-width: 260px;
 }
 
-/* QR code container */
+/* Star indicator */
+.star {
+  color: #ffee00; /* gold */
+  font-size: 1.2em;
+  margin-left: 4px;
+  cursor: default;
+  display: inline-block;
+}
+
+/* Link */
+.link {
+  text-decoration: underline;
+  color: #ffffff;
+  transition: color 0.2s ease;
+}
+.link:hover {
+  color: #2a486d;
+}
+
+/* QR container */
 .qr img {
   width: 200px;
   height: 200px;
   display: block;
 }
 
-/* Star indicator for primary interface */
-.star {
-  color: #ffee00; /* gold */
-  font-size: 1.2em;
-  margin-left: 4px;
-  cursor: default; /* no click action */
-  display: inline-block;
-}
-
-/* ===== UTILITY CLASSES ===== */
-/* Loading animation */
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-.animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Text color utilities (if needed) */
-.text-red-600 {
-  color: #dc2626; /* Tailwind red-600 */
-}
-
-/* Margin utilities (optional) */
-.mb-4 {
-  margin-bottom: 1rem;
+/* QR placeholder */
+.qr-placeholder {
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+  background: transparent;
+  text-align: center;
 }
 </style>
