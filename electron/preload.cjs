@@ -6,7 +6,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('electronAPI', {
   // Example: send a message to the main process
   send: (channel, data) => {
-    const allowedChannels = ['app:ready']
+    const allowedChannels = ['app:ready', 'macro:trigger']
     if (allowedChannels.includes(channel)) {
       ipcRenderer.send(channel, data)
     }

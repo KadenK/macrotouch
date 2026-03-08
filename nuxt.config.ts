@@ -21,4 +21,9 @@ export default defineNuxtConfig({
       hashMode: process.env.NUXT_HASH_ROUTER === 'true',
     },
   },
+
+  // Bind dev server to all interfaces for network access
+  devServer: {
+    host: '0.0.0.0',
+  },
 })

@@ -10,6 +10,7 @@
       :is="editable ? MacroEdit : MacroInteract"
       v-for="(item, index) in items"
       :key="index"
+      :id="item.id"
       :label="item.label"
       :icon="item.icon"
       @select-icon="handleSelectIcon(index)"
@@ -24,7 +25,7 @@ import MacroInteract from '../macro/macroInteract.vue'
 
 const props = withDefaults(
   defineProps<{
-    items: Array<{ label?: string; icon?: string | null }>
+    items: Array<{ id?: number; label?: string; icon?: string | null }>
     columns?: number
     rows?: number
     editable?: boolean

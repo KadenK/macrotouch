@@ -21,7 +21,8 @@
     "nuxt": "^4.3.1",
     "qrcode": "^1.5.4",
     "vue": "^3.5.28",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.15.1",

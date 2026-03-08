@@ -1,17 +1,22 @@
 'use strict'
 
-const { app, BrowserWindow, shell } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, screen } = require('electron')
 const path = require('path')
-const { URL } = require('url')
 
 // Keep a global reference to prevent garbage collection
 let mainWindow = null
 const isDev = process.env.NODE_ENV !== 'production'
 
 function createWindow() {
+  // Calculate window size relative to screen size
+  const primaryDisplay = screen.getPrimaryDisplay()
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
+  const windowWidth = Math.floor(screenWidth * 0.6) // 80% of screen width
+  const windowHeight = Math.floor(screenHeight * 0.6) // 80% of screen height
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: windowWidth,
+    height: windowHeight,
     minWidth: 800,
     minHeight: 600,
     webPreferences: {
@@ -49,6 +54,12 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow()
+
+  // IPC handlers
+  ipcMain.on('macro:trigger', (event, macroId) => {
+    console.log(`Macro triggered: ${macroId}`)
+    // TODO: Implement actual macro execution (e.g., simulate keystrokes)
+  })
 
   app.on('activate', () => {
     // On macOS, re-create the window when the dock icon is clicked
