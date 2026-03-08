@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="header">
-      <h1 @click="navigateTo('/')">{{ name }}</h1>
+      <h1 @click="navigateTo('/home')">{{ name }}</h1>
       <div class="right-buttons">
         <InputButton @click="navigateTo('/connect')">Connect</InputButton>
         <InputButton @click="navigateTo('/settings')">Settings</InputButton>

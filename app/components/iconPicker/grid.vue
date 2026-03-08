@@ -21,7 +21,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, watch } from 'vue'
 
-const ICONS_PER_BATCH = 50
+const ICONS_PER_BATCH = 75
 
 const props = defineProps<{
   icons: string[]
@@ -55,6 +55,9 @@ const loadMore = () => {
 onMounted(() => {
   if (!sentinel.value) return
 
+  // Find the nearest scrollable parent (modal-body)
+  const scrollableParent = sentinel.value.closest('.modal-body') || document.querySelector('.icon-grid')
+
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -64,7 +67,7 @@ onMounted(() => {
       })
     },
     {
-      root: document.querySelector('.icon-grid'),
+      root: scrollableParent,
       rootMargin: '100px',
       threshold: 0.01,
     },
@@ -77,7 +80,7 @@ onMounted(() => {
 <style scoped lang="postcss">
 .icon-grid {
   flex: 1;
-  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

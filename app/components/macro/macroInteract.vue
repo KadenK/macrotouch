@@ -1,6 +1,6 @@
 <template>
   <div class="macro-container">
-    <button class="macro">
+    <button class="macro" @click="triggerMacro">
       <Icon v-if="icon" :name="`ic:${icon}`" class="macro-icon" />
       <span v-else class="placeholder-icon">+</span>
     </button>
@@ -12,10 +12,22 @@
 // If Icon is not globally registered, import it here:
 // import Icon from 'path/to/Icon.vue'
 
-defineProps<{
+const props = defineProps<{
+  id: number
   label?: string
   icon?: string | null
 }>()
+
+const triggerMacro = async () => {
+  try {
+    await $fetch('/api/macro/trigger', {
+      method: 'POST',
+      body: { id: props.id }
+    })
+  } catch (error) {
+    console.error('Failed to trigger macro:', error)
+  }
+}
 </script>
 
 <style lang="postcss" scoped>
