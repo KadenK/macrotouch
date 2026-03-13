@@ -10,6 +10,13 @@ export default defineNuxtConfig({
     },
   },
 
+  components: [
+    {
+      path: '~/components',
+      pathPrefix: false,
+    },
+  ],
+
   modules: ['@pinia/nuxt', '@nuxt/eslint', '@nuxt/icon'],
 
   // Disable SSR — Electron renders client-side only
