@@ -11,8 +11,8 @@ function createWindow() {
   // Calculate window size relative to screen size
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
-  const windowWidth = Math.floor(screenWidth * 0.6) // 80% of screen width
-  const windowHeight = Math.floor(screenHeight * 0.6) // 80% of screen height
+  const windowWidth = Math.floor(screenWidth * 0.8) // 80% of screen width
+  const windowHeight = Math.floor(screenHeight * 0.8) // 80% of screen height
 
   mainWindow = new BrowserWindow({
     width: windowWidth,

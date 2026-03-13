@@ -12,6 +12,14 @@
 <script lang="ts" setup>
 import { ref } from 'vue'
 
+const props = defineProps<{
+  macroId: string
+}>()
+
+const macroStore = useMacroStore()
+
+const macro = computed(() => macroStore.macros[props.macroId])
+
 const isPickerOpen = ref(false)
 const selectedIconName = ref<string | null>(null)
 
