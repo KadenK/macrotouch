@@ -1,33 +1,38 @@
+<!-- /pages/screen.vue -->
 <template>
   <div class="screen-page">
-    <Screen :items="macros" :editable="false" />
+    <Screen v-if="currentScreenId" :screen-id="currentScreenId" :editable="false" @macro-click="triggerMacro" />
+    <div v-else>No screen available</div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { useMacroStore } from '~/stores/macro'
+import Screen from '~/components/screen/screen.vue'
+
 definePageMeta({
   layout: 'screen',
 })
 
-// Assuming macros will be fetched from API or store
-// For now, use dummy data
-const macros = [
-  { id: 1, label: 'Macro 1', icon: null },
-  { id: 2, label: 'Macro 2', icon: null },
-  { id: 3, label: 'Macro 3', icon: null },
-  { id: 4, label: 'Macro 4', icon: null },
-  { id: 5, label: 'Macro 5', icon: null },
-  { id: 6, label: 'Macro 6', icon: null },
-  { id: 7, label: 'Macro 7', icon: null },
-  { id: 8, label: 'Macro 8', icon: null },
-  { id: 9, label: 'Macro 9', icon: null },
-  { id: 10, label: 'Macro 10', icon: null },
-  { id: 11, label: 'Macro 11', icon: null },
-  { id: 12, label: 'Macro 12', icon: null },
-  { id: 13, label: 'Macro 13', icon: null },
-  { id: 14, label: 'Macro 14', icon: null },
-  { id: 15, label: 'Macro 15', icon: null },
-]
+const store = useMacroStore()
+const currentScreenId = ref<string>('')
+
+onMounted(() => {
+  const screenList = store.getScreenList()
+  if (screenList.length > 0) {
+    currentScreenId.value = screenList[0].id
+  }
+})
+
+function triggerMacro(macroId: string) {
+  const macro = store.getMacro(macroId)
+  if (macro) {
+    console.log('Triggering macro:', macro.name, 'with action:', macro.action.name)
+    // TODO: Instantiate and execute the actual action based on macro.action.type
+    // For now, we just log
+  }
+}
 </script>
 
 <style scoped>

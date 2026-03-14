@@ -1,4 +1,5 @@
-import type { Color } from './common'
+// /types/screen.ts
+import { Color } from './common'
 
 export interface ScreenSize {
   rows: number
@@ -11,79 +12,41 @@ export interface Position {
 }
 
 export interface ScreenRow {
-  macrosIds: string[]
+  macrosIds: string[] // empty string = no macro
 }
 
-export class MacroScreen {
+// Plain data object for a screen
+export interface ScreenData {
   id: string
   name: string
-  private _size: ScreenSize
+  size: ScreenSize
   backgroundColor: Color
   macroRows: ScreenRow[]
   defaultMacroIconColor?: Color
   defaultMacroBackgroundColor?: Color
+}
 
-  constructor(
-    name: string,
-    size: ScreenSize,
-    backgroundColor: Color,
-    macroRows?: ScreenRow[],
-    defaultMacroIconColor?: Color,
-    defaultMacroBackgroundColor?: Color,
-    id?: string,
-  ) {
-    if (macroRows && (size.rows !== macroRows?.length || size.columns !== macroRows?.[0]?.macrosIds.length)) {
-      throw new Error(
-        `Provided macroRows do not match the specified screen size. Expected: ${size.rows}x${size.columns} but macroRows contains: ${macroRows.length}x${macroRows[0]?.macrosIds.length}`,
-      )
-    }
+// Factory function to create a new screen with empty cells
+export function createScreen(
+  name: string,
+  rows: number,
+  columns: number,
+  backgroundColor: Color = new Color(240, 240, 240),
+): ScreenData {
+  const macroRows: ScreenRow[] = Array(rows)
+    .fill(null)
+    .map(() => ({ macrosIds: Array(columns).fill('') }))
 
-    this.id = id || crypto.randomUUID()
-    this.name = name
-    this._size = size
-    this.backgroundColor = backgroundColor
-    this.defaultMacroIconColor = defaultMacroIconColor
-    this.defaultMacroBackgroundColor = defaultMacroBackgroundColor
-    this.macroRows = macroRows || this._createEmptyRows()
-  }
-
-  get size(): ScreenSize {
-    return this._size
-  }
-
-  set size(newSize: ScreenSize) {
-    if (newSize.rows < 1 || newSize.columns < 1) {
-      throw new Error('Screen size must have at least 1 row and 1 column')
-    }
-    this._size = newSize
-    // If the new size has more rows, add empty rows
-    while (this.macroRows.length < newSize.rows) {
-      this.macroRows.push({ macrosIds: Array(newSize.columns).fill('') })
-    }
-    // If the new size has fewer rows, remove extra rows
-    if (this.macroRows.length > newSize.rows) {
-      this.macroRows = this.macroRows.slice(0, newSize.rows)
-    }
-    // Adjust columns in each row
-    for (const row of this.macroRows) {
-      while (row.macrosIds.length < newSize.columns) {
-        row.macrosIds.push('')
-      }
-      if (row.macrosIds.length > newSize.columns) {
-        row.macrosIds = row.macrosIds.slice(0, newSize.columns)
-      }
-    }
-  }
-
-  private _createEmptyRows(): ScreenRow[] {
-    const rows: ScreenRow[] = Array(this.size.rows)
-      .fill(0)
-      .map(() => ({ macrosIds: Array(this.size.columns).fill('') }))
-
-    return rows
+  return {
+    id: crypto.randomUUID(),
+    name,
+    size: { rows, columns },
+    backgroundColor,
+    macroRows,
   }
 }
 
+// Used for screen list displays
 export interface ScreenListItem {
   id: string
   name: string

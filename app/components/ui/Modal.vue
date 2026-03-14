@@ -17,6 +17,9 @@
         <div class="modal-body">
           <slot></slot>
         </div>
+        <div v-if="$slots.footer" class="modal-footer">
+          <slot name="footer"></slot>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -133,5 +136,11 @@ const close = () => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  border-top: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
 }
 </style>

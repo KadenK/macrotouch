@@ -22,7 +22,7 @@ const triggerMacro = async () => {
   try {
     await $fetch('/api/macro/trigger', {
       method: 'POST',
-      body: { id: props.id }
+      body: { id: props.id },
     })
   } catch (error) {
     console.error('Failed to trigger macro:', error)
