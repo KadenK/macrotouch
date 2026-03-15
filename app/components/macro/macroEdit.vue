@@ -83,6 +83,7 @@ const emit = defineEmits<{
 }>()
 
 const store = useMacroStore()
+store.init()
 const { macros } = storeToRefs(store)
 
 // The macro data for this cell (could be undefined)
@@ -181,7 +182,7 @@ function saveMacro() {
 function deleteMacro() {
   if (!macro.value) return
   if (confirm(`Are you sure you want to delete macro "${macro.value.name}"?`)) {
-    store.clearMacroAt(props.screenId, props.position)
+    store.clearMacroAt(macro.value.id, props.screenId, props.position)
     closeModal()
     emit('update')
   }

@@ -1,6 +1,9 @@
+import { ref, onMounted, onUnmounted, readonly } from 'vue'
+
 export const useWebSocket = () => {
   const ws = ref<WebSocket | null>(null)
   const isConnected = ref(false)
+  const messageHandlers: ((data: any) => void)[] = [] // store all listeners
 
   const connect = () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -16,13 +19,12 @@ export const useWebSocket = () => {
 
     ws.value.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data)
-      // Handle macro updates
-      if (data.type === 'macro-update') {
-        // Update macros
-        console.log('Macros updated:', data.macros)
-        // Emit or update store
-      } else if (data.type === 'macro-trigger') {
-        // Execute macro on host
+
+      // 1. Notify all registered handlers (store, etc.)
+      messageHandlers.forEach(handler => handler(data))
+
+      // 2. Special case: macro-trigger for Electron
+      if (data.type === 'macro-trigger') {
         // @ts-expect-error
         const electronAPI = window.electronAPI
         if (electronAPI) {
@@ -53,6 +55,11 @@ export const useWebSocket = () => {
     }
   }
 
+  // Add this function to allow external listeners
+  const onMessage = (handler: (data: any) => void) => {
+    messageHandlers.push(handler)
+  }
+
   onMounted(() => {
     connect()
   })
@@ -64,5 +71,6 @@ export const useWebSocket = () => {
   return {
     isConnected: readonly(isConnected),
     send,
+    onMessage,
   }
 }

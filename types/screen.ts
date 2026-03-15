@@ -1,4 +1,5 @@
 // /types/screen.ts
+import { generateUUID } from '~~/util/uuids'
 import { Color } from './common'
 
 export interface ScreenSize {
@@ -38,7 +39,7 @@ export function createScreen(
     .map(() => ({ macrosIds: Array(columns).fill('') }))
 
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     name,
     size: { rows, columns },
     backgroundColor,

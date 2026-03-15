@@ -22,6 +22,12 @@ export default defineNuxtConfig({
   // Disable SSR — Electron renders client-side only
   ssr: false,
 
+  nitro: {
+    routeRules: {
+      '/api/**': { cors: true },
+    },
+  },
+
   // Use hash router so file:// URLs work in production builds
   router: {
     options: {

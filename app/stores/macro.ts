@@ -1,87 +1,111 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// /app/stores/macro.ts
+/* eslint-disable @typescript-eslint/no-dynamic-delete */
 import { defineStore } from 'pinia'
-import type { MacroData, ScreenData, Position, ScreenListItem, ScreenRow } from '~/../types'
+import type { MacroData, ScreenData, Position, ScreenListItem } from '~/../types'
 import { Color } from '~/../types/common'
+import { useWebSocket } from '~/composables/useWebSocket'
 
-const STORAGE_KEY = 'macro-app-data'
+// Helper to reconstruct Color objects from plain JSON
+function hydrateColor(obj: any): Color {
+  return new Color(obj.r, obj.g, obj.b)
+}
 
-interface PersistedState {
-  macros: Record<string, MacroData>
-  screens: Record<string, ScreenData>
+function hydrateState(data: any): { macros: Record<string, MacroData>; screens: Record<string, ScreenData> } {
+  const macros: Record<string, MacroData> = {}
+  const screens: Record<string, ScreenData> = {}
+
+  if (data.macros) {
+    Object.entries(data.macros).forEach(([id, m]: [string, any]) => {
+      try {
+        macros[id] = {
+          ...m,
+          iconColor: hydrateColor(m.iconColor),
+          backgroundColor: hydrateColor(m.backgroundColor),
+        }
+      } catch (e) {
+        console.error(`Failed to hydrate macro ${id}:`, e, m)
+      }
+    })
+  }
+
+  if (data.screens) {
+    Object.entries(data.screens).forEach(([id, s]: [string, any]) => {
+      try {
+        screens[id] = {
+          ...s,
+          backgroundColor: hydrateColor(s.backgroundColor),
+          defaultMacroIconColor: s.defaultMacroIconColor ? hydrateColor(s.defaultMacroIconColor) : undefined,
+          defaultMacroBackgroundColor: s.defaultMacroBackgroundColor
+            ? hydrateColor(s.defaultMacroBackgroundColor)
+            : undefined,
+        }
+      } catch (e) {
+        console.error(`Failed to hydrate screen ${id}:`, e, s)
+      }
+    })
+  }
+
+  return { macros, screens }
 }
 
 export const useMacroStore = defineStore('Macro', () => {
-  // Load initial state from localStorage
-  const loadState = (): PersistedState => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        // Reconstruct Color instances from plain objects
-        if (parsed.macros) {
-          Object.values(parsed.macros).forEach((m: any) => {
-            if (m.iconColor && !(m.iconColor instanceof Color)) {
-              m.iconColor = new Color(m.iconColor.r, m.iconColor.g, m.iconColor.b)
-            }
-            if (m.backgroundColor && !(m.backgroundColor instanceof Color)) {
-              m.backgroundColor = new Color(m.backgroundColor.r, m.backgroundColor.g, m.backgroundColor.b)
-            }
-          })
+  const macros = ref<Record<string, MacroData>>({})
+  const screens = ref<Record<string, ScreenData>>({})
+  const isInitialized = ref(false)
+
+  const { send, onMessage } = useWebSocket()
+
+  // --- WebSocket listeners ---
+  onMessage((data: any) => {
+    switch (data.type) {
+      case 'macro-updated':
+        macros.value[data.payload.id] = data.payload
+        break
+      case 'macro-deleted':
+        delete macros.value[data.payload.id]
+        break
+      case 'screen-updated':
+        screens.value[data.payload.id] = data.payload
+        break
+      case 'screen-deleted':
+        delete screens.value[data.payload.id]
+        break
+      case 'cell-updated':
+        const { screenId, row, column, macroId } = data.payload
+        if (screens.value[screenId]) {
+          screens.value[screenId].macroRows[row].macrosIds[column] = macroId
         }
-        if (parsed.screens) {
-          Object.values(parsed.screens).forEach((s: any) => {
-            if (s.backgroundColor && !(s.backgroundColor instanceof Color)) {
-              s.backgroundColor = new Color(s.backgroundColor.r, s.backgroundColor.g, s.backgroundColor.b)
-            }
-            if (s.defaultMacroIconColor && !(s.defaultMacroIconColor instanceof Color)) {
-              s.defaultMacroIconColor = new Color(
-                s.defaultMacroIconColor.r,
-                s.defaultMacroIconColor.g,
-                s.defaultMacroIconColor.b,
-              )
-            }
-            if (s.defaultMacroBackgroundColor && !(s.defaultMacroBackgroundColor instanceof Color)) {
-              s.defaultMacroBackgroundColor = new Color(
-                s.defaultMacroBackgroundColor.r,
-                s.defaultMacroBackgroundColor.g,
-                s.defaultMacroBackgroundColor.b,
-              )
-            }
-          })
-        }
-        return parsed
-      }
-    } catch (e) {
-      console.error('Failed to load state from localStorage', e)
+        break
     }
-    return { macros: {}, screens: {} }
-  }
+  })
 
-  const state = loadState()
-  const macros = ref<Record<string, MacroData>>(state.macros)
-  const screens = ref<Record<string, ScreenData>>(state.screens)
+  let initPromise: Promise<void> | null = null
+  // --- Initialisation ---
+  async function init() {
+    // If a fetch is already in progress, wait for it
+    if (initPromise) return initPromise
 
-  // Save to localStorage whenever state changes
-  function saveState() {
-    try {
-      const toStore = {
-        macros: macros.value,
-        screens: screens.value,
+    initPromise = (async () => {
+      try {
+        const data = await $fetch('/api/state')
+        const hydrated = hydrateState(data)
+        // Always replace local state with server state
+        macros.value = hydrated.macros
+        screens.value = hydrated.screens
+        console.log('Store initialized with server data:', {
+          macros: Object.keys(macros.value).length,
+          screens: Object.keys(screens.value).length,
+        })
+      } catch (e) {
+        console.error('Failed to load state from server', e)
+        // Keep existing local state if server fails
+      } finally {
+        initPromise = null
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
-    } catch (e) {
-      console.error('Failed to save state to localStorage', e)
-    }
-  }
+    })()
 
-  watch(
-    [macros, screens],
-    () => {
-      saveState()
-    },
-    { deep: true },
-  )
+    return initPromise
+  }
 
   // --- Internal helpers ---
   function _addMacro(macro: MacroData) {
@@ -89,41 +113,45 @@ export const useMacroStore = defineStore('Macro', () => {
   }
 
   function _deleteMacro(id: string) {
-    const { [id]: _removed, ...rest } = macros.value
-    macros.value = rest
+    delete macros.value[id]
   }
 
   // --- Public macro functions ---
-  function getMacro(id: string): MacroData | undefined {
+  function getMacro(id: string) {
     return macros.value[id]
   }
 
-  function updateMacro(updatedMacro: MacroData, id?: string) {
+  async function updateMacro(updatedMacro: MacroData, id?: string) {
     const macroId = id || updatedMacro.id
     macros.value[macroId] = updatedMacro
+    try {
+      await $fetch('/api/macro', { method: 'POST', body: updatedMacro })
+    } catch (e) {
+      console.error('Failed to update macro', e)
+    }
   }
 
-  // Add a macro to the store (without placing it in a screen)
   function addMacroToStore(macro: MacroData) {
     _addMacro(macro)
   }
 
-  // Delete a macro from the store (should also remove from any screens)
-  // This function only deletes from store; use clearMacroAt to remove from screen
-  function deleteMacroFromStore(id: string) {
-    _deleteMacro(id)
+  async function deleteMacroFromStore(id: string) {
+    delete macros.value[id]
+    try {
+      await $fetch(`/api/macro/${id}`, { method: 'DELETE' })
+    } catch (e) {
+      console.error('Failed to delete macro', e)
+    }
   }
 
   // --- Screen functions ---
-  function addScreen(screen: ScreenData, macrosArray?: MacroData[] | MacroData[][]) {
-    // If macros are provided, add them to store and associate with screen
+  async function addScreen(screen: ScreenData, macrosArray?: MacroData[] | MacroData[][]) {
     if (Array.isArray(macrosArray) && macrosArray.length > 0) {
       if (Array.isArray(macrosArray[0])) {
-        // 2D array
         const macroRows = macrosArray as MacroData[][]
-        const rows: ScreenRow[] = []
+        const rows: { macrosIds: string[] }[] = []
         for (const row of macroRows) {
-          const currentRow: ScreenRow = { macrosIds: [] }
+          const currentRow: { macrosIds: string[] } = { macrosIds: [] }
           for (const macro of row) {
             _addMacro(macro)
             currentRow.macrosIds.push(macro.id)
@@ -132,7 +160,6 @@ export const useMacroStore = defineStore('Macro', () => {
         }
         screen.macroRows = rows
       } else {
-        // Flat array – add macros but don't place them (assume they are already placed)
         for (const macro of macrosArray as MacroData[]) {
           _addMacro(macro)
         }
@@ -140,129 +167,175 @@ export const useMacroStore = defineStore('Macro', () => {
     }
 
     screens.value[screen.id] = screen
+    try {
+      await $fetch('/api/screen', { method: 'POST', body: screen })
+    } catch (e) {
+      console.error('Failed to save screen', e)
+    }
   }
 
-  function getScreen(id: string): ScreenData | undefined {
-    return screens.value[id]
+  function getScreen(id: string) {
+    return screens.value?.[id]
   }
 
   function getScreenList(): ScreenListItem[] {
-    return Object.values(screens.value).map((screen) => ({
-      id: screen.id,
-      name: screen.name,
-    }))
+    return screens.value ? Object.values(screens.value).map((s) => ({ id: s.id, name: s.name })) : []
   }
 
-  // Deletes the screen and all macros associated with it
-  function deleteScreen(screenOrScreenId: string | ScreenData) {
+  async function deleteScreen(screenOrScreenId: string | ScreenData) {
     const id = typeof screenOrScreenId === 'string' ? screenOrScreenId : screenOrScreenId.id
-    if (!screens.value[id]) {
-      console.error(`Screen with id ${id} does not exist`)
-      return
-    }
-    // Delete all macros in this screen
-    for (const row of screens.value[id].macroRows) {
+    const screen = screens.value[id]
+    if (!screen) return
+
+    // Optimistically remove screen and its macros from local store
+    // (server will broadcast deletions, but we can also update locally now)
+    for (const row of screen.macroRows) {
       for (const macroId of row.macrosIds) {
         if (macroId) {
-          _deleteMacro(macroId)
+          delete macros.value[macroId]
         }
       }
     }
-    const { [id]: _removed, ...rest } = screens.value
-    screens.value = rest
+    delete screens.value[id]
+
+    try {
+      await $fetch(`/api/screen/${id}`, { method: 'DELETE' })
+    } catch (e) {
+      console.error('Failed to delete screen', e)
+      // Optionally revert optimistic update
+    }
   }
 
-  function updateScreen(updatedScreen: ScreenData, id?: string) {
+  async function updateScreen(updatedScreen: ScreenData, id?: string) {
     const screenId = id || updatedScreen.id
     screens.value[screenId] = updatedScreen
+    try {
+      await $fetch('/api/screen', { method: 'POST', body: updatedScreen })
+    } catch (e) {
+      console.error('Failed to update screen', e)
+    }
   }
 
-  // --- Cell manipulation functions ---
-  function setMacroAt(screenId: string, position: Position, macro: MacroData) {
-    const screen = screens.value[screenId]
-    if (!screen) {
-      console.error(`Screen with id ${screenId} does not exist`)
-      return
-    }
-    if (position.row >= screen.size.rows || position.column >= screen.size.columns) {
-      console.error(
-        `Invalid position (${position.row}, ${position.column}) for screen size ${screen.size.rows}x${screen.size.columns}`,
-      )
-      return
-    }
-    // Add macro to store if not already present
-    if (!macros.value[macro.id]) {
-      _addMacro(macro)
-    }
-    // Update screen cell
-    screen.macroRows[position.row].macrosIds[position.column] = macro.id
-  }
-
-  function clearMacroAt(screenId: string, position: Position) {
+  // --- Cell functions ---
+  async function setMacroAt(screenId: string, position: Position, macro: MacroData) {
     const screen = screens.value[screenId]
     if (!screen) return
     if (position.row >= screen.size.rows || position.column >= screen.size.columns) return
-    const macroId = screen.macroRows[position.row].macrosIds[position.column]
-    if (macroId) {
-      // Optionally delete the macro from store? Usually we keep it in case other screens reference it.
-      // We'll just clear the cell.
-      screen.macroRows[position.row].macrosIds[position.column] = ''
+
+    // 1. Save macro data to server first (if it's new or updated)
+    try {
+      await $fetch('/api/macro', { method: 'POST', body: macro })
+    } catch (e) {
+      console.error('Failed to save macro data', e)
+      return // stop if macro save fails
     }
+
+    // 2. Add to local store if not already present
+    if (!macros.value[macro.id]) {
+      _addMacro(macro)
+    }
+
+    // 3. Update local cell
+    screen.macroRows[position.row].macrosIds[position.column] = macro.id
+
+    // 4. Update cell on server
+    try {
+      await $fetch(`/api/screen/${screenId}/cell`, {
+        method: 'POST',
+        body: { row: position.row, column: position.column, macroId: macro.id },
+      })
+    } catch (e) {
+      console.error('Failed to set cell', e)
+    }
+  }
+
+  async function clearMacroAt(macroId: string, screenId: string, position: Position) {
+    // 1. Clear the cell where it resides (optional, but ensures no orphaned reference)
+    const screen = screens.value[screenId]
+    if (screen && position.row < screen.size.rows && position.column < screen.size.columns) {
+      screen.macroRows[position.row].macrosIds[position.column] = ''
+      // Notify server about cell update
+      try {
+        await $fetch(`/api/screen/${screenId}/cell`, {
+          method: 'POST',
+          body: { row: position.row, column: position.column, macroId: null },
+        })
+      } catch (e) {
+        console.error('Failed to clear cell', e)
+      }
+    }
+
+    // 2. Delete macro from server
+    try {
+      await $fetch(`/api/macro/${macroId}`, { method: 'DELETE' })
+    } catch (e) {
+      console.error('Failed to delete macro from server', e)
+      return
+    }
+
+    // 3. Delete macro from local store
+    delete macros.value[macroId]
   }
 
   function getMacroAt(screenId: string, position: Position): MacroData | undefined {
     const screen = screens.value[screenId]
     if (!screen) return undefined
     const macroId = screen.macroRows[position.row]?.macrosIds[position.column]
-    if (!macroId) return undefined
-    return macros.value[macroId]
+    return macroId ? macros.value[macroId] : undefined
   }
 
-  // Legacy function names (for backward compatibility if needed)
-  function addMacro(screenOrScreenId: string | ScreenData, macro: MacroData, position: Position) {
+  // Legacy function names
+  async function addMacro(screenOrScreenId: string | ScreenData, macro: MacroData, position: Position) {
     const screenId = typeof screenOrScreenId === 'string' ? screenOrScreenId : screenOrScreenId.id
-    setMacroAt(screenId, position, macro)
+    await setMacroAt(screenId, position, macro)
   }
 
-  function deleteMacro(screenOrScreenId: string | ScreenData, position: Position) {
+  async function deleteMacro(screenOrScreenId: string | ScreenData, position: Position) {
     const screenId = typeof screenOrScreenId === 'string' ? screenOrScreenId : screenOrScreenId.id
-    clearMacroAt(screenId, position)
+    await clearMacroAt(screenId, position)
   }
 
-  function moveMacro(screenOrScreenId: string | ScreenData, from: Position, to: Position) {
+  async function moveMacro(screenOrScreenId: string | ScreenData, from: Position, to: Position) {
     const screenId = typeof screenOrScreenId === 'string' ? screenOrScreenId : screenOrScreenId.id
     const screen = screens.value[screenId]
     if (!screen) return
     const macroId = screen.macroRows[from.row]?.macrosIds[from.column]
     if (!macroId) return
-    // Validate target position
-    if (to.row >= screen.size.rows || to.column >= screen.size.columns) return
-    // Clear source
+
     screen.macroRows[from.row].macrosIds[from.column] = ''
-    // Set target
     screen.macroRows[to.row].macrosIds[to.column] = macroId
+
+    try {
+      await $fetch(`/api/screen/${screenId}/cell`, {
+        method: 'POST',
+        body: { row: from.row, column: from.column, macroId: null },
+      })
+      await $fetch(`/api/screen/${screenId}/cell`, {
+        method: 'POST',
+        body: { row: to.row, column: to.column, macroId },
+      })
+    } catch (e) {
+      console.error('Failed to move macro', e)
+    }
   }
 
   return {
-    // State
     macros,
     screens,
-    // Macro functions
+    isInitialized,
+    init,
     getMacro,
     updateMacro,
     addMacroToStore,
     deleteMacroFromStore,
-    // Screen functions
     addScreen,
     getScreen,
     getScreenList,
     deleteScreen,
     updateScreen,
-    // Cell functions
     setMacroAt,
     clearMacroAt,
     getMacroAt,
-    // Legacy functions
     addMacro,
     deleteMacro,
     moveMacro,

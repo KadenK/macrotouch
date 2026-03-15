@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // /types/macro.ts
 import { Color } from './common'
+import { generateUUID } from '../util/uuids'
 
 export enum ActionType {
   Filepath = 'filepath',
@@ -66,7 +67,7 @@ export function createNoOpActionData(): ActionData {
 // Factory function to create a new macro with defaults
 export function createMacro(name = 'New Macro'): MacroData {
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     name,
     action: createNoOpActionData(),
     icon: { source: IconSource.Library, value: 'baseline:home' },
