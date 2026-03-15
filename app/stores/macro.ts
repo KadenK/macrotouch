@@ -5,6 +5,31 @@ export const useMacroStore = defineStore('Macro', () => {
   const macros = ref<Record<string, Macro>>({})
   const screens = ref<Record<string, MacroScreen>>({})
 
+  const isApplyingRemoteState = ref(false)
+  const isReady = ref(false)
+  const broadcastFn = ref<
+    ((state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) => void) | null
+  >(null)
+
+  function setBroadcastFn(
+    fn: (state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) => void,
+  ) {
+    broadcastFn.value = fn
+  }
+
+  function setState(state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) {
+    isApplyingRemoteState.value = true
+    macros.value = state.macros || {}
+    screens.value = state.screens || {}
+    isApplyingRemoteState.value = false
+    isReady.value = true
+  }
+
+  function maybeBroadcast() {
+    if (isApplyingRemoteState.value || !isReady.value) return
+    broadcastFn.value?.({ macros: macros.value, screens: screens.value })
+  }
+
   function getMacro(id: string): Macro | undefined {
     return macros.value[id]
   }
@@ -12,6 +37,7 @@ export const useMacroStore = defineStore('Macro', () => {
   function updateMacro(updatedMacro: Macro, id?: string) {
     const macroId = id || updatedMacro.id
     macros.value[macroId] = updatedMacro
+    maybeBroadcast()
   }
 
   function _addMacro(macro: Macro) {
@@ -50,6 +76,7 @@ export const useMacroStore = defineStore('Macro', () => {
     }
 
     screens.value[screen.id] = screen
+    maybeBroadcast()
   }
 
   function getScreen(id: string): MacroScreen | undefined {
@@ -77,11 +104,13 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     const { [id]: _removedScreen, ...remainingScreens } = screens.value
     screens.value = remainingScreens
+    maybeBroadcast()
   }
 
   function updateScreen(updatedScreen: MacroScreen, id?: string) {
     const screenId = id || updatedScreen.id
     screens.value[screenId] = updatedScreen
+    maybeBroadcast()
   }
 
   function addMacro(screenOrScreenId: string | MacroScreen, macro: Macro, position: Position) {
@@ -97,6 +126,7 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     _addMacro(macro)
     screen.macroRows[position.row]!.macrosIds[position.column] = macro.id
+    maybeBroadcast()
   }
 
   function deleteMacro(screenOrScreenId: string | MacroScreen, position: Position) {
@@ -114,6 +144,7 @@ export const useMacroStore = defineStore('Macro', () => {
     if (macroId) {
       _deleteMacro(macroId)
       screen.macroRows[position.row]!.macrosIds[position.column] = ''
+      maybeBroadcast()
     }
   }
 
@@ -137,10 +168,13 @@ export const useMacroStore = defineStore('Macro', () => {
     if (macroId) {
       _deleteMacro(macroId)
       screen.macroRows[to.row]!.macrosIds[to.column] = macroId
+      maybeBroadcast()
     }
   }
 
   return {
+    macros,
+    screens,
     getMacro,
     updateMacro,
     addScreen,
@@ -151,6 +185,8 @@ export const useMacroStore = defineStore('Macro', () => {
     addMacro,
     deleteMacro,
     moveMacro,
+    setState,
+    setBroadcastFn,
   }
 })
 

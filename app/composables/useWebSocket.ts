@@ -1,28 +1,50 @@
-export const useWebSocket = () => {
+type WebSocketMessage =
+  | { type: 'state'; state: { macros: Record<string, any>; screens: Record<string, any> } }
+  | { type: 'state-update'; state: { macros: Record<string, any>; screens: Record<string, any> } }
+  | { type: 'macro-trigger'; id: string }
+
+type WebSocketHandlers = {
+  state?: (state: { macros: Record<string, any>; screens: Record<string, any> }) => void
+  'macro-trigger'?: (id: string) => void
+  open?: () => void
+  close?: () => void
+  error?: (error: Event) => void
+}
+
+const createWebSocket = () => {
   const ws = ref<WebSocket | null>(null)
   const isConnected = ref(false)
+  const handlers = reactive<WebSocketHandlers>({})
 
   const connect = () => {
+    if (ws.value) return // already connected/connecting
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
     ws.value = new WebSocket(`${protocol}//${host}:3001`)
 
-    if (!ws.value) return
-
     ws.value.onopen = () => {
       isConnected.value = true
+      handlers.open?.()
       console.log('WebSocket connected')
     }
 
     ws.value.onmessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data)
-      // Handle macro updates
-      if (data.type === 'macro-update') {
-        // Update macros
-        console.log('Macros updated:', data.macros)
-        // Emit or update store
+      let data: WebSocketMessage | undefined
+      try {
+        data = JSON.parse(event.data)
+      } catch {
+        console.warn('Received invalid websocket message')
+        return
+      }
+
+      if (!data || typeof data !== 'object' || typeof (data as any).type !== 'string') return
+
+      if (data.type === 'state') {
+        handlers.state?.(data.state)
       } else if (data.type === 'macro-trigger') {
-        // Execute macro on host
+        handlers['macro-trigger']?.(data.id)
+        // Backwards compatibility: trigger macro in Electron host if available
         // @ts-expect-error
         const electronAPI = window.electronAPI
         if (electronAPI) {
@@ -33,10 +55,12 @@ export const useWebSocket = () => {
 
     ws.value.onclose = () => {
       isConnected.value = false
+      handlers.close?.()
       console.log('WebSocket disconnected')
     }
 
     ws.value.onerror = (error: Event) => {
+      handlers.error?.(error)
       console.error('WebSocket error:', error)
     }
   }
@@ -47,22 +71,33 @@ export const useWebSocket = () => {
     }
   }
 
-  const send = (data: Record<string, unknown>) => {
+  const send = (data: WebSocketMessage) => {
     if (ws.value && isConnected.value) {
       ws.value.send(JSON.stringify(data))
     }
   }
 
-  onMounted(() => {
-    connect()
-  })
-
-  onUnmounted(() => {
-    disconnect()
-  })
+  const on = <T extends keyof WebSocketHandlers>(event: T, handler: NonNullable<WebSocketHandlers[T]>) => {
+    handlers[event] = handler as any
+  }
 
   return {
     isConnected: readonly(isConnected),
+    connect,
+    disconnect,
     send,
+    on,
   }
+}
+
+let singleton: ReturnType<typeof createWebSocket> | null = null
+
+export const useWebSocket = () => {
+  if (!singleton) {
+    singleton = createWebSocket()
+    if (typeof window !== 'undefined') {
+      singleton.connect()
+    }
+  }
+  return singleton
 }
