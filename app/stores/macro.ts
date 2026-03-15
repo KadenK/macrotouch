@@ -222,18 +222,16 @@ export const useMacroStore = defineStore('Macro', () => {
     if (!screen) return
     if (position.row >= screen.size.rows || position.column >= screen.size.columns) return
 
-    // 1. Save macro data to server first (if it's new or updated)
+    // 1. Save macro data to server
     try {
       await $fetch('/api/macro', { method: 'POST', body: macro })
     } catch (e) {
       console.error('Failed to save macro data', e)
-      return // stop if macro save fails
+      return
     }
 
-    // 2. Add to local store if not already present
-    if (!macros.value[macro.id]) {
-      _addMacro(macro)
-    }
+    // 2. Update local macro store (always)
+    macros.value[macro.id] = macro
 
     // 3. Update local cell
     screen.macroRows[position.row].macrosIds[position.column] = macro.id
