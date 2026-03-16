@@ -1,0 +1,269 @@
+<template>
+  <Modal v-model="isOpen" :title="modalTitle" :fixed-size="true">
+    <div class="edit-form">
+      <div class="form-group">
+        <label>Name</label>
+        <input v-model="editForm.name" type="text" placeholder="Macro name" />
+      </div>
+
+      <div class="form-group">
+        <label>Icon</label>
+        <div class="icon-preview" @click="openIconPicker">
+          <Icon
+            v-if="editForm.icon.source === 'LIBRARY'"
+            :name="`ic:${editForm.icon.value}`"
+            class="preview-icon"
+            :style="{ color: colorToHex(editForm.iconColor) }"
+          />
+          <span v-else class="preview-placeholder">?</span>
+        </div>
+        <button class="small-btn" @click="openIconPicker">Choose Icon</button>
+      </div>
+
+      <div class="form-group">
+        <label>Icon Color</label>
+        <input v-model="editForm.iconColorHex" type="color" />
+      </div>
+
+      <div class="form-group">
+        <label>Background Color</label>
+        <input v-model="editForm.bgColorHex" type="color" />
+      </div>
+
+      <div class="modal-actions">
+        <button v-if="macro" class="delete-btn" @click="deleteMacro">Delete</button>
+        <div class="right-actions">
+          <button class="cancel-btn" @click="closeModal">Cancel</button>
+          <button class="save-btn" @click="saveMacro">Save</button>
+        </div>
+      </div>
+    </div>
+  </Modal>
+
+  <IconPickerModal v-model="isIconPickerOpen" @select="handleIconSelect" />
+</template>
+
+<script lang="ts" setup>
+import { computed, ref, watch } from 'vue'
+import { useMacroStore } from '~/stores/macro'
+import Modal from '~/components/ui/Modal.vue'
+import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
+import type { Macro } from '~/../types/macro'
+import { createMacro } from '~/../types/macro'
+import type { Position } from '~/../types'
+import { createColor, colorFromHex, colorToHex } from '~/../types/common'
+
+const props = defineProps<{
+  modelValue: boolean
+  macroId?: string | null
+  screenId: string
+  position: Position
+  editable?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': (value: boolean) => void
+  saved: void
+  deleted: void
+}>()
+
+const store = useMacroStore()
+
+const macro = computed<Macro | undefined>(() => (props.macroId ? store.getMacro(props.macroId) : undefined))
+
+const modalTitle = computed(() => (macro.value ? 'Edit Macro' : 'Create Macro'))
+
+const isOpen = computed({
+  get: () => props.modelValue,
+  set: (value: boolean) => emit('update:modelValue', value),
+})
+
+const isIconPickerOpen = ref(false)
+
+const editForm = ref({
+  name: '',
+  icon: { source: 'LIBRARY', value: 'baseline:home' } as any,
+  iconColor: createColor(0, 0, 0),
+  backgroundColor: createColor(255, 255, 255),
+  iconColorHex: '#000000',
+  bgColorHex: '#ffffff',
+})
+
+watch(isOpen, (open) => {
+  if (!open) return
+
+  if (macro.value) {
+    editForm.value = {
+      name: macro.value.name,
+      icon: { ...macro.value.icon },
+      iconColor: macro.value.iconColor,
+      backgroundColor: macro.value.backgroundColor,
+      iconColorHex: colorToHex(macro.value.iconColor),
+      bgColorHex: colorToHex(macro.value.backgroundColor),
+    }
+  } else {
+    editForm.value = {
+      name: 'New Macro',
+      icon: { source: 'LIBRARY', value: 'baseline:home' } as any,
+      iconColor: createColor(0, 0, 0),
+      backgroundColor: createColor(255, 255, 255),
+      iconColorHex: '#000000',
+      bgColorHex: '#ffffff',
+    }
+  }
+})
+
+watch(
+  () => editForm.value.iconColorHex,
+  (newHex) => {
+    editForm.value.iconColor = colorFromHex(newHex)
+  },
+)
+
+watch(
+  () => editForm.value.bgColorHex,
+  (newHex) => {
+    editForm.value.backgroundColor = colorFromHex(newHex)
+  },
+)
+
+function closeModal() {
+  isOpen.value = false
+}
+
+function openIconPicker() {
+  isIconPickerOpen.value = true
+}
+
+function handleIconSelect(iconName: string) {
+  editForm.value.icon = { source: 'LIBRARY', value: iconName }
+  isIconPickerOpen.value = false
+}
+
+function saveMacro() {
+  const macroId = macro.value?.id || crypto.randomUUID()
+  const updatedMacro: Macro = {
+    id: macroId,
+    name: editForm.value.name,
+    action: macro.value?.action ?? { name: 'No Action', actionFields: [], type: 'noop' },
+    icon: editForm.value.icon,
+    iconColor: editForm.value.iconColor,
+    backgroundColor: editForm.value.backgroundColor,
+  }
+
+  if (macro.value) {
+    store.updateMacro(updatedMacro)
+  } else {
+    store.addMacro(props.screenId, updatedMacro, props.position)
+  }
+
+  emit('saved')
+  closeModal()
+}
+
+function deleteMacro() {
+  if (!macro.value) return
+  if (confirm(`Are you sure you want to delete macro "${macro.value.name}"?`)) {
+    store.deleteMacro(props.screenId, props.position)
+    emit('deleted')
+    closeModal()
+  }
+}
+</script>
+
+<style scoped lang="postcss">
+.edit-form {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.form-group input[type='text'] {
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+
+.icon-preview {
+  width: 64px;
+  height: 64px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.preview-icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+}
+
+.preview-placeholder {
+  font-size: 24px;
+  color: #9ca3af;
+}
+
+.small-btn {
+  padding: 0.25rem 0.5rem;
+  background-color: #e5e7eb;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.right-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cancel-btn,
+.save-btn,
+.delete-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background-color: #e5e7eb;
+}
+
+.save-btn {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #dc2626;
+}
+</style>

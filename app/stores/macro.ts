@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
+import { ref } from 'vue'
 import type { Macro, MacroScreen, Position, ScreenListItem, ScreenRow } from '~/../types'
+import { createMacroScreen } from '~/../types/screen'
+import { createColor } from '~/../types/common'
 
 export const useMacroStore = defineStore('Macro', () => {
   const macros = ref<Record<string, Macro>>({})
@@ -7,20 +10,48 @@ export const useMacroStore = defineStore('Macro', () => {
 
   const isApplyingRemoteState = ref(false)
   const isReady = ref(false)
-  const broadcastFn = ref<
-    ((state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) => void) | null
-  >(null)
 
-  function setBroadcastFn(
-    fn: (state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) => void,
-  ) {
+  // Broadcasts a message to the server (e.g., state updates, macro triggers)
+  const broadcastFn = ref<((data: any) => void) | null>(null)
+
+  function setBroadcastFn(fn: (data: any) => void) {
     broadcastFn.value = fn
   }
 
-  function setState(state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) {
+  function setState(state: { macros: Record<string, Macro>; screens: Record<string, any> }) {
     isApplyingRemoteState.value = true
+
     macros.value = state.macros || {}
-    screens.value = state.screens || {}
+    screens.value = {}
+
+    if (state.screens) {
+      for (const [id, rawScreen] of Object.entries(state.screens)) {
+        const screen = createMacroScreen(
+          rawScreen?.name ?? 'Untitled',
+          rawScreen?.size ?? { rows: 3, columns: 4 },
+          rawScreen?.backgroundColor ?? createColor(240, 240, 240),
+          rawScreen?.defaultMacroIconColor,
+          rawScreen?.defaultMacroBackgroundColor,
+          rawScreen?.id,
+        )
+
+        // normalize macroRows if present
+        if (Array.isArray(rawScreen?.macroRows)) {
+          screen.macroRows = rawScreen.macroRows.map((row: any) => ({
+            macrosIds: Array.isArray(row?.macrosIds)
+              ? row.macrosIds.slice(0, screen.size.columns)
+              : Array(screen.size.columns).fill(''),
+          }))
+          // Ensure correct number of rows
+          while (screen.macroRows.length < screen.size.rows) {
+            screen.macroRows.push({ macrosIds: Array(screen.size.columns).fill('') })
+          }
+        }
+
+        screens.value[id] = screen
+      }
+    }
+
     isApplyingRemoteState.value = false
     isReady.value = true
   }
@@ -38,6 +69,13 @@ export const useMacroStore = defineStore('Macro', () => {
     const macroId = id || updatedMacro.id
     macros.value[macroId] = updatedMacro
     maybeBroadcast()
+  }
+
+  function triggerMacro(macroId: string) {
+    if (!macros.value[macroId]) {
+      console.warn(`Macro with id ${macroId} does not exist`)
+    }
+    broadcastFn.value?.({ type: 'macro-trigger', id: macroId })
   }
 
   function _addMacro(macro: Macro) {
@@ -175,6 +213,7 @@ export const useMacroStore = defineStore('Macro', () => {
   return {
     macros,
     screens,
+    isReady,
     getMacro,
     updateMacro,
     addScreen,
@@ -185,6 +224,7 @@ export const useMacroStore = defineStore('Macro', () => {
     addMacro,
     deleteMacro,
     moveMacro,
+    triggerMacro,
     setState,
     setBroadcastFn,
   }

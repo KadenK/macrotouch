@@ -1,4 +1,5 @@
 import type { Color } from './common'
+import { createColor } from './common'
 
 export enum ActionType {
   Filepath = 'filepath',
@@ -36,28 +37,22 @@ export interface Icon {
   value: string
 }
 
-export class Macro {
+export interface Macro {
   id: string
   name: string
-  action: Action
+  action: any
   icon: Icon
   iconColor: Color
   backgroundColor: Color
+}
 
-  constructor(name: string, action: Action, icon: Icon, iconColor: Color, backgroundColor: Color, id?: string) {
-    this.id = id || crypto.randomUUID()
-    this.name = name
-    this.action = action
-    this.icon = icon
-    this.iconColor = iconColor
-    this.backgroundColor = backgroundColor
-  }
-
-  onTrigger(...args: any[]): void {
-    if (this.action.validate(...args)) {
-      this.action.execute(...args)
-    } else {
-      console.error('Invalid action parameters')
-    }
+export function createMacro(name = 'New Macro'): Macro {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    action: { name: 'No Action', actionFields: [], type: 'noop' },
+    icon: { source: IconSource.Library, value: 'baseline:home' },
+    iconColor: createColor(0, 0, 0),
+    backgroundColor: createColor(255, 255, 255),
   }
 }

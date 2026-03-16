@@ -3,48 +3,70 @@
     class="macro-grid"
     :style="{
       gridTemplateColumns: `repeat(${columns}, 1fr)`,
-      gridTemplateRows: `repeat(${rows}, auto)`,
+      gridTemplateRows: `repeat(${rows}, 1fr)`,
     }"
   >
-    <component
-      :is="editable ? MacroEdit : MacroInteract"
-      v-for="(item, index) in items"
-      :key="index"
-      :id="item.id"
-      :label="item.label"
-      :icon="item.icon"
-      @select-icon="handleSelectIcon(index)"
-      class="grid-item"
-    />
+    <template v-if="screen">
+      <template v-if="editable">
+        <MacroEdit
+          v-for="(macroId, index) in cellMacroIds"
+          :key="`edit-${screen.id}-${getPositionFromIndex(index).row}-${getPositionFromIndex(index).column}`"
+          :macro-id="macroId"
+          :screen-id="screen.id"
+          :position="getPositionFromIndex(index)"
+          :editable="true"
+          class="grid-item"
+        />
+      </template>
+      <template v-else>
+        <MacroInteract
+          v-for="(macroId, index) in cellMacroIds"
+          :key="`view-${screen.id}-${getPositionFromIndex(index).row}-${getPositionFromIndex(index).column}`"
+          :macro-id="macroId"
+          class="grid-item"
+        />
+      </template>
+    </template>
+    <div v-else class="no-screen">No screen found.</div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useMacroStore } from '~/stores/macro'
 import MacroEdit from '../macro/macroEdit.vue'
 import MacroInteract from '../macro/macroInteract.vue'
+import type { Position } from '~/../types'
 
-const props = withDefaults(
-  defineProps<{
-    items: Array<{ id?: number; label?: string; icon?: string | null }>
-    columns?: number
-    rows?: number
-    editable?: boolean
-  }>(),
-  {
-    columns: 5,
-    rows: 3,
-    editable: false,
-  },
-)
-
-const emit = defineEmits<{
-  (e: 'select-icon', index: number): void
+const props = defineProps<{
+  screenId: string
+  editable?: boolean
 }>()
 
-const handleSelectIcon = (index: number) => {
-  if (props.editable) {
-    emit('select-icon', index)
+const store = useMacroStore()
+const { screens } = storeToRefs(store)
+
+const screen = computed(() => screens.value[props.screenId])
+
+const rows = computed(() => screen.value?.size?.rows ?? 0)
+const columns = computed(() => screen.value?.size?.columns ?? 0)
+
+const cellMacroIds = computed(() => {
+  if (!screen.value) return []
+
+  const result: string[] = []
+  for (let r = 0; r < screen.value.size.rows; r++) {
+    const row = screen.value.macroRows[r]
+    for (let c = 0; c < screen.value.size.columns; c++) {
+      result.push(row?.macrosIds[c] || '')
+    }
   }
+  return result
+})
+
+function getPositionFromIndex(index: number): Position {
+  return { row: Math.floor(index / columns.value), column: index % columns.value }
 }
 </script>
 
@@ -62,6 +84,12 @@ const handleSelectIcon = (index: number) => {
 
 .grid-item {
   width: 100%;
-  height: auto;
+  height: 100%;
+}
+
+.no-screen {
+  padding: 1rem;
+  text-align: center;
+  color: #6b7280;
 }
 </style>

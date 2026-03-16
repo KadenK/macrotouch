@@ -1,36 +1,37 @@
 <template>
-  <div class="macro-container">
-    <button class="macro" @click="triggerMacro">
-      <Icon v-if="icon" :name="`ic:${icon}`" class="macro-icon" />
-      <span v-else class="placeholder-icon">+</span>
-    </button>
-    <span class="macro-label">{{ label }}</span>
+  <div class="macro-container" :class="{ 'macro-empty': !macro }" @click="handleClick">
+    <div class="macro" :style="{ backgroundColor: macro ? colorToHex(macro.backgroundColor) : undefined }">
+      <Icon
+        v-if="macro"
+        :name="macro.icon.source === 'LIBRARY' ? `ic:${macro.icon.value}` : ''"
+        class="macro-icon"
+        :style="{ color: colorToHex(macro.iconColor) }"
+      />
+    </div>
+    <span v-if="macro" class="macro-label">{{ macro.name }}</span>
   </div>
 </template>
 
 <script lang="ts" setup>
-// If Icon is not globally registered, import it here:
-// import Icon from 'path/to/Icon.vue'
+import { computed } from 'vue'
+import { useMacroStore } from '~/stores/macro'
+import type { Macro } from '~/../types'
+import { colorToHex } from '~/../types/common'
 
 const props = defineProps<{
-  id: number
-  label?: string
-  icon?: string | null
+  macroId: string
 }>()
 
-const triggerMacro = async () => {
-  try {
-    await $fetch('/api/macro/trigger', {
-      method: 'POST',
-      body: { id: props.id }
-    })
-  } catch (error) {
-    console.error('Failed to trigger macro:', error)
-  }
+const store = useMacroStore()
+const macro = computed<Macro | undefined>(() => store.getMacro(props.macroId))
+
+function handleClick() {
+  if (!macro.value) return
+  store.triggerMacro(props.macroId)
 }
 </script>
 
-<style lang="postcss" scoped>
+<style scoped lang="postcss">
 .macro-container {
   display: flex;
   flex-direction: column;
@@ -38,6 +39,20 @@ const triggerMacro = async () => {
   gap: 0.25rem;
   width: 100%;
   height: 100%;
+  cursor: pointer;
+}
+
+.macro-empty {
+  cursor: default;
+}
+
+.macro-empty .macro {
+  background: transparent;
+  box-shadow: none;
+}
+
+.macro-empty .macro-label {
+  display: none;
 }
 
 .macro {
@@ -46,39 +61,24 @@ const triggerMacro = async () => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 0;
-  border: none;
   border-radius: 8px;
-  background-color: #ffffff;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow:
-    0 4px 6px -1px rgb(0 0 0 / 0.1),
-    0 2px 4px -2px rgb(0 0 0 / 0.1);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  transition: transform 0.1s ease;
 }
 
-.macro:hover {
-  box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);
-  transform: scale(0.98);
+.macro:active {
+  transform: scale(0.95);
 }
 
 .placeholder-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  font-size: 1.5rem;
+  font-size: 3rem;
   font-weight: 700;
-  line-height: 1;
   color: #3b82f6;
-  background: transparent;
-  border-radius: 0;
 }
 
 .macro-icon {
-  width: 40px;
-  height: 40px;
+  width: 80px;
+  height: 80px;
   font-size: 28px;
 }
 
