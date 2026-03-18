@@ -1,7 +1,5 @@
 <template>
   <div class="app">
-    <h2>{{ title }}</h2>
-
     <div class="screen-controls">
       <button @click="createNewScreen">Add Screen</button>
       <button v-if="screenList.length" class="delete-btn" @click="deleteCurrentScreen">Delete Current Screen</button>
@@ -101,11 +99,6 @@ function deleteCurrentScreen() {
   align-items: flex-start;
   font-family: sans-serif;
   padding: 1rem;
-}
-
-h2 {
-  margin-bottom: 1rem;
-  color: #333;
 }
 
 .screen-controls {
