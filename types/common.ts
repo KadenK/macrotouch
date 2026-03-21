@@ -19,3 +19,8 @@ export function colorFromHex(hex: string): Color {
   const b = parseInt(hex.slice(5, 7), 16)
   return createColor(r, g, b)
 }
+
+export function getContrastColor(color: Color): string {
+  const luminance = (0.299 * color.r + 0.587 * color.g + 0.114 * color.b) / 255;
+  return luminance > 0.5 ? '#000000' : '#FFFFFF'
+}

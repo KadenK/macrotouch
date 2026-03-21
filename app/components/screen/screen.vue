@@ -4,6 +4,8 @@
     :style="{
       gridTemplateColumns: `repeat(${columns}, 1fr)`,
       gridTemplateRows: `repeat(${rows}, 1fr)`,
+      backgroundColor: screen ? colorToHex(screen.backgroundColor) : '#e9e9e9',
+      '--label-color': screen ? getContrastColor(screen.backgroundColor) : '#000000',
     }"
   >
     <template v-if="screen">
@@ -38,6 +40,7 @@ import { useMacroStore } from '~/stores/macro'
 import MacroEdit from '../macro/macroEdit.vue'
 import MacroInteract from '../macro/macroInteract.vue'
 import type { Position } from '~/../types'
+import { colorToHex, getContrastColor } from '~/../types/common'
 
 const props = defineProps<{
   screenId: string
@@ -75,7 +78,6 @@ function getPositionFromIndex(index: number): Position {
   display: grid;
   gap: 1rem;
   padding: 1rem;
-  background-color: #e9e9e9;
   border-radius: 12px;
   width: 100%;
   max-width: 800px;

@@ -53,6 +53,7 @@ import { createMacro } from '~/../types/macro'
 import type { Position } from '~/../types'
 import { createColor, colorFromHex, colorToHex } from '~/../types/common'
 
+
 const props = defineProps<{
   modelValue: boolean
   macroId?: string | null
@@ -70,6 +71,8 @@ const emit = defineEmits<{
 const store = useMacroStore()
 
 const macro = computed<Macro | undefined>(() => (props.macroId ? store.getMacro(props.macroId) : undefined))
+
+const screen = computed(() => store.getScreen(props.screenId))
 
 const modalTitle = computed(() => (macro.value ? 'Edit Macro' : 'Create Macro'))
 
@@ -93,6 +96,7 @@ watch(isOpen, (open) => {
   if (!open) return
 
   if (macro.value) {
+    // editing existing macro: load its values
     editForm.value = {
       name: macro.value.name,
       icon: { ...macro.value.icon },
@@ -102,13 +106,16 @@ watch(isOpen, (open) => {
       bgColorHex: colorToHex(macro.value.backgroundColor),
     }
   } else {
+    // new macro: use screen defaults if available
+    const defaultIconColor = screen.value?.defaultMacroIconColor ?? createColor(0, 0, 0)
+    const defaultBgColor = screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255)
     editForm.value = {
       name: 'New Macro',
       icon: { source: 'LIBRARY', value: 'baseline:home' } as any,
-      iconColor: createColor(0, 0, 0),
-      backgroundColor: createColor(255, 255, 255),
-      iconColorHex: '#000000',
-      bgColorHex: '#ffffff',
+      iconColor: defaultIconColor,
+      backgroundColor: defaultBgColor,
+      iconColorHex: colorToHex(defaultIconColor),
+      bgColorHex: colorToHex(defaultBgColor),
     }
   }
 })
