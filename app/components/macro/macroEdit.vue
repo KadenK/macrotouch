@@ -117,7 +117,7 @@ function openEditor() {
 
 .macro-label {
   font-size: 0.75rem;
-  color: #333;
+  color: var(--label-color, #333);
   text-align: center;
   max-width: 100%;
   overflow: hidden;

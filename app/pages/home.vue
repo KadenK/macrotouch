@@ -2,6 +2,7 @@
   <div class="app">
     <div class="screen-controls">
       <button @click="createNewScreen">Add Screen</button>
+      <button v-if="currentScreenId" class="edit-btn" @click="openEditModal">Edit Current Screen</button>
       <button v-if="screenList.length" class="delete-btn" @click="deleteCurrentScreen">Delete Current Screen</button>
     </div>
 
@@ -13,6 +14,8 @@
 
     <MacroGridScreen v-if="currentScreenId" :screen-id="currentScreenId" :editable="true" />
     <div v-else>No screens. Create one.</div>
+
+    <ScreenEditModal v-model="isEditModalOpen" :screen-id="currentScreenId" />
   </div>
 </template>
 
@@ -22,9 +25,10 @@ import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
 import { createMacroScreen } from '~/../types/screen'
 import { createColor } from '~/../types/common'
+import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
 
 const store = useMacroStore()
-
+const isEditModalOpen = ref(false)
 const title = ref('Dashboard')
 const currentScreenId = ref<string>('')
 
@@ -34,9 +38,24 @@ function getCurrentScreenName(): string {
   return screenList.value.find((s) => s.id === currentScreenId.value)?.name ?? 'Unknown'
 }
 
+function openEditModal() {
+  if (currentScreenId.value) {
+    isEditModalOpen.value = true
+  }
+}
+
 function ensureScreenExists() {
+  const defaultIconColor = createColor(0, 0, 0)
+  const defaultBgColor = createColor(255, 255, 255)
+
   if (screenList.value.length === 0) {
-    const defaultScreen = createMacroScreen('Screen 1', { rows: 3, columns: 5 }, createColor(240, 240, 240))
+    const defaultScreen = createMacroScreen(
+      'Screen 1',
+      { rows: 3, columns: 5 },
+      createColor(240, 240, 240),
+      defaultIconColor,
+      defaultBgColor,
+    )
     store.addScreen(defaultScreen)
     currentScreenId.value = defaultScreen.id
   } else {
@@ -67,10 +86,15 @@ watch(screenList, (screens) => {
 })
 
 function createNewScreen() {
+  const defaultIconColor = createColor(0, 0, 0)
+  const defaultBgColor = createColor(255, 255, 255)
+
   const newScreen = createMacroScreen(
-    `Screen ${screenList.value.length + 1}`,
+    'Screen 1',
     { rows: 3, columns: 5 },
     createColor(240, 240, 240),
+    defaultIconColor,
+    defaultBgColor,
   )
   store.addScreen(newScreen)
   currentScreenId.value = newScreen.id
@@ -111,6 +135,15 @@ select,
 button {
   margin-bottom: 1rem;
   margin-right: 1rem;
+}
+
+.edit-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .delete-btn {
