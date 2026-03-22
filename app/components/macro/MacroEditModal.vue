@@ -108,7 +108,7 @@ const selectedActionFields = computed(() => {
 
 const editForm = ref({
   name: '',
-  icon: { source: IconSource.Library, value: 'baseline:home' } as Icon,
+  icon: { source: IconSource.Library, value: 'baseline-home' } as Icon,
   iconColor: createColor(0, 0, 0),
   backgroundColor: createColor(255, 255, 255),
   iconColorHex: '#000000',
@@ -138,7 +138,7 @@ watch(isOpen, (open) => {
     const defaultBgColor = screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255)
     editForm.value = {
       name: 'New Macro',
-      icon: { source: 'LIBRARY', value: 'baseline:home' } as Icon,
+      icon: { source: 'LIBRARY', value: 'baseline-home' } as Icon,
       iconColor: defaultIconColor,
       backgroundColor: defaultBgColor,
       iconColorHex: colorToHex(defaultIconColor),

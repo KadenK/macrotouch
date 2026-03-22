@@ -26,7 +26,7 @@ export function createMacro(name = 'New Macro'): Macro {
     id: crypto.randomUUID(),
     name,
     actionId: undefined,
-    icon: { source: IconSource.Library, value: 'baseline:home' },
+    icon: { source: IconSource.Library, value: 'baseline-home' },
     iconColor: createColor(0, 0, 0),
     backgroundColor: createColor(255, 255, 255),
   }

@@ -12,7 +12,7 @@
       </option>
     </select>
 
-    <MacroGridScreen v-if="currentScreenId" :screen-id="currentScreenId" :editable="true" />
+    <MacroGridScreen v-if="currentScreenId" class="macro-grid" :screen-id="currentScreenId" :editable="true" />
     <div v-else>No screens. Create one.</div>
 
     <ScreenEditModal v-model="isEditModalOpen" :screen-id="currentScreenId" />
@@ -23,8 +23,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
-import { createMacroScreen } from '~/../types'
-import { createColor } from '~/../types'
+import { createMacroScreen, createColor } from '~/../types'
 import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
 
 const store = useMacroStore()
@@ -157,5 +156,14 @@ button {
 
 .delete-btn:hover {
   background-color: #dc2626;
+}
+
+.macro-grid {
+  width: 100%;
+  max-width: 70rem;
+  min-width: 30rem;
+  height: 100%;
+  min-height: 20rem;
+  max-height: 50rem;
 }
 </style>

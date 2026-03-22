@@ -1,0 +1,12 @@
+/* Global reset: ensure body margin is 0 on all devices */
+html,
+body,
+#__nuxt,
+#__layout {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  overflow: hidden !important;
+}
