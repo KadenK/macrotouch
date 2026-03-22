@@ -6,8 +6,13 @@ export default defineNuxtPlugin(() => {
   const ws = useWebSocket()
 
   // When the store updates, broadcast state changes to the server.
+  // macro-trigger events go directly to server; state updates are wrapped.
   store.setBroadcastFn((data) => {
-    ws.send({ type: 'state-update', state: data })
+    if (data && typeof data === 'object' && (data as any).type === 'macro-trigger') {
+      ws.send(data as any)
+    } else {
+      ws.send({ type: 'state-update', state: data })
+    }
   })
 
   // When the server broadcasts the latest state, apply it locally.

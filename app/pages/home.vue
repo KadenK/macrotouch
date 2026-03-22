@@ -23,8 +23,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
-import { createMacroScreen } from '~/../types/screen'
-import { createColor } from '~/../types/common'
+import { createMacroScreen } from '~/../types'
+import { createColor } from '~/../types'
 import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
 
 const store = useMacroStore()

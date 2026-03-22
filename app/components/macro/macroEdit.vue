@@ -30,9 +30,9 @@
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import MacroEditModal from './MacroEditModal.vue'
-import type { Macro } from '~/../types/macro'
+import type { Macro } from '~/../types'
 import type { Position } from '~/../types'
-import { colorToHex } from '~/../types/common'
+import { colorToHex } from '~/../types'
 
 const props = defineProps<{
   macroId?: string

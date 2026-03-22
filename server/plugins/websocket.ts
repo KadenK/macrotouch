@@ -1,7 +1,9 @@
 import { WebSocketServer } from 'ws'
+import type { Macro } from '../../types'
+import { handleMacroTrigger } from '../util/handleMacro'
 
 type MacroState = {
-  macros: Record<string, unknown>
+  macros: Record<string, Macro>
   screens: Record<string, unknown>
 }
 
@@ -28,7 +30,9 @@ export default defineNitroPlugin(() => {
     })
   }
 
-  globalThis.broadcast = broadcast
+  // Expose state and broadcast for API-trigger endpoints.
+  ;(globalThis as any).broadcast = broadcast
+  ;(globalThis as any).macroState = state
 
   const sendState = (ws: any) => {
     ws.send(JSON.stringify({ type: 'state', state }))
@@ -58,9 +62,12 @@ export default defineNitroPlugin(() => {
           broadcast({ type: 'state', state })
         }
       } else if (data.type === 'macro-trigger') {
-        if (typeof data.id === 'string') {
-          broadcast({ type: 'macro-trigger', id: data.id })
+        const macro: Macro | undefined = state.macros[data.id]
+        if (!macro) {
+          console.warn('Received macro trigger for unknown macro ID', data.id)
+          return
         }
+        handleMacroTrigger(macro)
       }
     })
 
