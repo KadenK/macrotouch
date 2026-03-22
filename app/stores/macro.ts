@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Macro, MacroScreen, Position, ScreenListItem, ScreenRow } from '~/../types'
-import { createMacroScreen } from '~/../types/screen'
-import { createColor } from '~/../types/common'
+import type { Action, Color, Macro, MacroScreen, Position, ScreenListItem, ScreenRow } from '~/../types'
+import { createMacroScreen, createColor } from '~/../types'
+import { actions as actionList } from '~/../util/actions'
 
 export const useMacroStore = defineStore('Macro', () => {
   const macros = ref<Record<string, Macro>>({})
@@ -11,14 +11,28 @@ export const useMacroStore = defineStore('Macro', () => {
   const isApplyingRemoteState = ref(false)
   const isReady = ref(false)
 
-  // Broadcasts a message to the server (e.g., state updates, macro triggers)
-  const broadcastFn = ref<((data: any) => void) | null>(null)
+  const actions = ref<Action[]>(actionList)
 
-  function setBroadcastFn(fn: (data: any) => void) {
+  const broadcastFn = ref<
+    | ((
+        data:
+          | { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }
+          | { type: 'macro-trigger'; id: string },
+      ) => void)
+    | null
+  >(null)
+
+  function setBroadcastFn(
+    fn: (
+      data:
+        | { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }
+        | { type: 'macro-trigger'; id: string },
+    ) => void,
+  ) {
     broadcastFn.value = fn
   }
 
-  function setState(state: { macros: Record<string, Macro>; screens: Record<string, any> }) {
+  function setState(state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) {
     isApplyingRemoteState.value = true
 
     macros.value = state.macros || {}
@@ -26,23 +40,25 @@ export const useMacroStore = defineStore('Macro', () => {
 
     if (state.screens) {
       for (const [id, rawScreen] of Object.entries(state.screens)) {
+        const backgroundColor: Color = rawScreen?.backgroundColor ?? createColor(240, 240, 240)
+        const defaultMacroIconColor: Color | undefined = rawScreen?.defaultMacroIconColor
+        const defaultMacroBackgroundColor: Color | undefined = rawScreen?.defaultMacroBackgroundColor
+
         const screen = createMacroScreen(
           rawScreen?.name ?? 'Untitled',
           rawScreen?.size ?? { rows: 3, columns: 4 },
-          rawScreen?.backgroundColor ?? createColor(240, 240, 240),
-          rawScreen?.defaultMacroIconColor,
-          rawScreen?.defaultMacroBackgroundColor,
+          backgroundColor,
+          defaultMacroIconColor,
+          defaultMacroBackgroundColor,
           rawScreen?.id,
         )
 
-        // normalize macroRows if present
         if (Array.isArray(rawScreen?.macroRows)) {
-          screen.macroRows = rawScreen.macroRows.map((row: any) => ({
+          screen.macroRows = rawScreen.macroRows.map((row) => ({
             macrosIds: Array.isArray(row?.macrosIds)
               ? row.macrosIds.slice(0, screen.size.columns)
               : Array(screen.size.columns).fill(''),
           }))
-          // Ensure correct number of rows
           while (screen.macroRows.length < screen.size.rows) {
             screen.macroRows.push({ macrosIds: Array(screen.size.columns).fill('') })
           }
@@ -204,7 +220,8 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     const macroId = screen.macroRows[from.row]!.macrosIds[from.column]
     if (macroId) {
-      _deleteMacro(macroId)
+      // Keep the macro in the store; just change the screen cell reference.
+      screen.macroRows[from.row]!.macrosIds[from.column] = ''
       screen.macroRows[to.row]!.macrosIds[to.column] = macroId
       maybeBroadcast()
     }
@@ -213,6 +230,7 @@ export const useMacroStore = defineStore('Macro', () => {
   return {
     macros,
     screens,
+    actions,
     isReady,
     getMacro,
     updateMacro,

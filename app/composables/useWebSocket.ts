@@ -1,11 +1,9 @@
 type WebSocketMessage =
   | { type: 'state'; state: { macros: Record<string, any>; screens: Record<string, any> } }
   | { type: 'state-update'; state: { macros: Record<string, any>; screens: Record<string, any> } }
-  | { type: 'macro-trigger'; id: string }
 
 type WebSocketHandlers = {
   state?: (state: { macros: Record<string, any>; screens: Record<string, any> }) => void
-  'macro-trigger'?: (id: string) => void
   open?: () => void
   close?: () => void
   error?: (error: Event) => void
@@ -42,15 +40,8 @@ const createWebSocket = () => {
 
       if (data.type === 'state') {
         handlers.state?.(data.state)
-      } else if (data.type === 'macro-trigger') {
-        handlers['macro-trigger']?.(data.id)
-        // Backwards compatibility: trigger macro in Electron host if available
-        // @ts-expect-error
-        const electronAPI = window.electronAPI
-        if (electronAPI) {
-          electronAPI.send('macro:trigger', data.id)
-        }
       }
+      // macro-trigger is intentionally not handled on clients; server executes actions.
     }
 
     ws.value.onclose = () => {

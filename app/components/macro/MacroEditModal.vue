@@ -7,6 +7,22 @@
       </div>
 
       <div class="form-group">
+        <label>Action</label>
+        <select v-model="selectedActionId">
+          <option value="">(None)</option>
+          <option v-for="action in store.actions" :key="action.actionId" :value="action.actionId">
+            {{ action.label }}
+          </option>
+        </select>
+      </div>
+
+      <ActionFieldsForm
+        v-if="selectedActionFields.length > 0"
+        v-model="actionParameters"
+        :action-fields="selectedActionFields"
+      />
+
+      <div class="form-group">
         <label>Icon</label>
         <div class="icon-preview" @click="openIconPicker">
           <Icon
@@ -48,11 +64,10 @@ import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
-import type { Macro } from '~/../types/macro'
-import { createMacro } from '~/../types/macro'
-import type { Position } from '~/../types'
-import { createColor, colorFromHex, colorToHex } from '~/../types/common'
-
+import ActionFieldsForm from '~/components/macro/ActionFieldsForm.vue'
+import type { Macro, Position, Icon } from '~/../types'
+import { createColor, colorFromHex, colorToHex } from '~/../types'
+import { IconSource } from '~/../types/macro'
 
 const props = defineProps<{
   modelValue: boolean
@@ -63,9 +78,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': (value: boolean) => void
-  saved: void
-  deleted: void
+  (event: 'update:modelValue', value: boolean): void
+  (event: 'saved'): void
+  (event: 'deleted'): void
 }>()
 
 const store = useMacroStore()
@@ -83,9 +98,17 @@ const isOpen = computed({
 
 const isIconPickerOpen = ref(false)
 
+const selectedActionId = ref('')
+const actionParameters = ref<Record<string, unknown>>({})
+
+const selectedActionFields = computed(() => {
+  const selectedAction = store.actions.find((action) => action.actionId === selectedActionId.value)
+  return selectedAction?.actionFields ?? []
+})
+
 const editForm = ref({
   name: '',
-  icon: { source: 'LIBRARY', value: 'baseline:home' } as any,
+  icon: { source: IconSource.Library, value: 'baseline:home' } as Icon,
   iconColor: createColor(0, 0, 0),
   backgroundColor: createColor(255, 255, 255),
   iconColorHex: '#000000',
@@ -105,13 +128,17 @@ watch(isOpen, (open) => {
       iconColorHex: colorToHex(macro.value.iconColor),
       bgColorHex: colorToHex(macro.value.backgroundColor),
     }
+    selectedActionId.value = macro.value.actionId ?? ''
+    actionParameters.value = macro.value.parameters ? { ...macro.value.parameters } : {}
   } else {
+    selectedActionId.value = store.actions[0]?.actionId ?? ''
+    actionParameters.value = {}
     // new macro: use screen defaults if available
     const defaultIconColor = screen.value?.defaultMacroIconColor ?? createColor(0, 0, 0)
     const defaultBgColor = screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255)
     editForm.value = {
       name: 'New Macro',
-      icon: { source: 'LIBRARY', value: 'baseline:home' } as any,
+      icon: { source: 'LIBRARY', value: 'baseline:home' } as Icon,
       iconColor: defaultIconColor,
       backgroundColor: defaultBgColor,
       iconColorHex: colorToHex(defaultIconColor),
@@ -119,6 +146,23 @@ watch(isOpen, (open) => {
     }
   }
 })
+
+watch(
+  () => selectedActionId.value,
+  (newActionId) => {
+    // When action changes, reset parameter values for new action fields.
+    const selectedAction = store.actions.find((action) => action.actionId === newActionId)
+    if (selectedAction) {
+      const freshParams: Record<string, unknown> = {}
+      for (const field of selectedAction.actionFields) {
+        freshParams[field.key] = actionParameters.value[field.key] ?? ''
+      }
+      actionParameters.value = freshParams
+    } else {
+      actionParameters.value = {}
+    }
+  },
+)
 
 watch(
   () => editForm.value.iconColorHex,
@@ -152,7 +196,8 @@ function saveMacro() {
   const updatedMacro: Macro = {
     id: macroId,
     name: editForm.value.name,
-    action: macro.value?.action ?? { name: 'No Action', actionFields: [], type: 'noop' },
+    actionId: selectedActionId.value || undefined,
+    parameters: actionParameters.value,
     icon: editForm.value.icon,
     iconColor: editForm.value.iconColor,
     backgroundColor: editForm.value.backgroundColor,

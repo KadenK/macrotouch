@@ -40,7 +40,7 @@ import { useMacroStore } from '~/stores/macro'
 import MacroEdit from '../macro/macroEdit.vue'
 import MacroInteract from '../macro/macroInteract.vue'
 import type { Position } from '~/../types'
-import { colorToHex, getContrastColor } from '~/../types/common'
+import { colorToHex, getContrastColor } from '~/../types'
 
 const props = defineProps<{
   screenId: string

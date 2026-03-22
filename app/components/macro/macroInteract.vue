@@ -16,7 +16,7 @@
 import { computed } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import type { Macro } from '~/../types'
-import { colorToHex } from '~/../types/common'
+import { colorToHex } from '~/../types'
 
 const props = defineProps<{
   macroId: string

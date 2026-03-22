@@ -31,7 +31,7 @@
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
-import { colorFromHex, colorToHex } from '~/../types/common'
+import { colorFromHex, colorToHex } from '~/../types'
 
 const props = defineProps<{
   modelValue: boolean
