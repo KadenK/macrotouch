@@ -164,7 +164,17 @@ watch(screenList, (list) => {
 
 <style scoped>
 .screen-page {
-  padding: 1rem;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .empty-state {
