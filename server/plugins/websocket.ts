@@ -1,7 +1,7 @@
 import { WebSocketServer } from 'ws'
 import type { Macro } from '../../types'
 import { handleMacroTrigger } from '../util/handleMacro'
-import fs from 'fs/promises'
+import fs from 'fs'
 import path from 'path'
 
 type MacroState = {
@@ -14,7 +14,7 @@ type WSMessage =
   | { type: 'state-update'; state: MacroState }
   | { type: 'macro-trigger'; id: string }
 
-export default defineNitroPlugin(async () => {
+export default defineNitroPlugin(() => {
   const wss = new WebSocketServer({ port: 3001 })
   const clients = new Set<any>()
 
@@ -23,7 +23,7 @@ export default defineNitroPlugin(async () => {
 
   // Ensure the data directory exists
   try {
-    await fs.mkdir(path.dirname(stateFilePath), { recursive: true })
+    fs.mkdirSync(path.dirname(stateFilePath), { recursive: true })
   } catch (err) {
     console.error('Failed to create data directory:', err)
   }
@@ -31,7 +31,7 @@ export default defineNitroPlugin(async () => {
   // Load state from file or start with empty object
   let state: MacroState = { macros: {}, screens: {} }
   try {
-    const data = await fs.readFile(stateFilePath, 'utf-8')
+    const data = fs.readFileSync(stateFilePath, 'utf-8')
     state = JSON.parse(data)
     console.log('Loaded state from file')
   } catch (err) {
@@ -42,9 +42,9 @@ export default defineNitroPlugin(async () => {
   }
 
   // Save state to file (async, non‑blocking)
-  const saveState = async () => {
+  const saveState = () => {
     try {
-      await fs.writeFile(stateFilePath, JSON.stringify(state, null, 2), 'utf-8')
+      fs.writeFile(stateFilePath, JSON.stringify(state, null, 2), 'utf-8')
     } catch (err) {
       console.error('Failed to save state:', err)
     }
@@ -91,7 +91,7 @@ export default defineNitroPlugin(async () => {
           Object.assign(state, data.state)
           broadcast({ type: 'state', state })
           // Persist the updated state
-          await saveState()
+          saveState()
         }
       } else if (data.type === 'macro-trigger') {
         const macro: Macro | undefined = state.macros[data.id]
