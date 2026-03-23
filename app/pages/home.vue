@@ -1,19 +1,29 @@
 <template>
-  <div class="app">
-    <div class="screen-controls">
-      <button @click="createNewScreen">Add Screen</button>
-      <button v-if="currentScreenId" class="edit-btn" @click="openEditModal">Edit Current Screen</button>
-      <button v-if="screenList.length" class="delete-btn" @click="deleteCurrentScreen">Delete Current Screen</button>
+  <div class="page">
+    <div class="container">
+      <div class="section">
+        <div class="screen-controls">
+          <button class="btn btn-primary" @click="createNewScreen">Add Screen</button>
+          <button v-if="currentScreenId" class="btn btn-secondary" @click="openEditModal">
+            Edit Current Screen
+          </button>
+          <button v-if="screenList.length" class="btn btn-ghost" @click="deleteCurrentScreen">
+            Delete Current Screen
+          </button>
+        </div>
+
+        <select v-if="screenList.length" v-model="currentScreenId" class="screen-select">
+          <option v-for="screen in screenList" :key="screen.id" :value="screen.id">
+            {{ screen.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="macro-surface">
+        <MacroGridScreen v-if="currentScreenId" class="macro-grid" :screen-id="currentScreenId" :editable="true" />
+        <div v-else class="empty-state">No screens yet. Create one to begin.</div>
+      </div>
     </div>
-
-    <select v-if="screenList.length" v-model="currentScreenId">
-      <option v-for="screen in screenList" :key="screen.id" :value="screen.id">
-        {{ screen.name }}
-      </option>
-    </select>
-
-    <MacroGridScreen v-if="currentScreenId" class="macro-grid" :screen-id="currentScreenId" :editable="true" />
-    <div v-else>No screens. Create one.</div>
 
     <ScreenEditModal v-model="isEditModalOpen" :screen-id="currentScreenId" />
   </div>
@@ -116,46 +126,43 @@ function deleteCurrentScreen() {
 </script>
 
 <style scoped>
-.app {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  font-family: sans-serif;
-  padding: 1rem;
-}
-
 .screen-controls {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
-select,
-button {
-  margin-bottom: 1rem;
-  margin-right: 1rem;
+.screen-select {
+  appearance: none;
+  width: 100%;
+  max-width: 16rem;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background:
+    var(--color-surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    no-repeat;
+  background-position: right 1rem center;
+  background-size: 1.1rem 1.1rem;
+  margin-bottom: var(--space-3);
+  padding-right: 3rem;
 }
 
-.edit-btn {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
+.empty-state {
+  padding: var(--space-8);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-50);
+  color: var(--color-muted);
 }
 
-.delete-btn {
-  background-color: #ef4444;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.delete-btn:hover {
-  background-color: #dc2626;
+.macro-surface {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
 }
 
 .macro-grid {
