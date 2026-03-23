@@ -43,11 +43,18 @@ export default defineNitroPlugin(() => {
 
   // Save state to file (async, non‑blocking)
   const saveState = () => {
+    let data
     try {
-      fs.writeFile(stateFilePath, JSON.stringify(state, null, 2), 'utf-8')
+      data = JSON.stringify(state, null, 2) // This can throw (synchronous)
     } catch (err) {
-      console.error('Failed to save state:', err)
+      console.error('Failed to stringify state:', err)
+      return
     }
+
+    // This is non-blocking - returns immediately
+    fs.writeFile(stateFilePath, data, 'utf-8', (err) => {
+      if (err) console.error('Failed to save state:', err) // Handle async errors here
+    })
   }
 
   // Broadcast to all connected clients
