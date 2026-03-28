@@ -107,6 +107,7 @@ function createNewScreen() {
   )
   store.addScreen(newScreen)
   currentScreenId.value = newScreen.id
+  isEditModalOpen.value = true   // ← add this line
 }
 
 function deleteCurrentScreen() {
