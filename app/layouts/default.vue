@@ -1,7 +1,10 @@
 <template>
   <div>
     <div class="header">
-      <h1 class="brand" @click="navigateTo('/home')">{{ name }}</h1>
+      <div class="logo-title" @click="navigateTo('/home')">
+        <Icon class="logo" name="mt:logo" size="2rem"></Icon>
+        <h1 class="brand">MacroTouch</h1>
+      </div>
       <div class="right-buttons">
         <InputButton @click="navigateTo('/connect')">Connect</InputButton>
         <InputButton @click="navigateTo('/settings')">Settings</InputButton>
@@ -12,9 +15,7 @@
   </div>
 </template>
 
-<script lang="ts" setup>
-const name = ref('MacroTouch')
-</script>
+<script lang="ts" setup></script>
 
 <style lang="postcss" scoped>
 .header {
@@ -25,6 +26,16 @@ const name = ref('MacroTouch')
   padding: 0 var(--space-8);
   margin-bottom: var(--space-3);
   padding-top: var(--space-2);
+}
+
+.logo-title {
+  display: flex;
+  align-items: center;
+
+  .logo {
+    margin-top: -1rem;
+    margin-right: 0.2rem;
+  }
 }
 
 .brand {

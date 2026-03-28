@@ -1,3 +1,5 @@
+import { useRuntimeConfig } from '#app'
+
 type WebSocketMessage =
   | { type: 'state'; state: { macros: Record<string, any>; screens: Record<string, any> } }
   | { type: 'state-update'; state: { macros: Record<string, any>; screens: Record<string, any> } }
@@ -19,7 +21,8 @@ const createWebSocket = () => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
-    ws.value = new WebSocket(`${protocol}//${host}:3001`)
+    const port = useRuntimeConfig().public.websocketPort || 3001
+    ws.value = new WebSocket(`${protocol}//${host}:${port}`)
 
     ws.value.onopen = () => {
       isConnected.value = true
