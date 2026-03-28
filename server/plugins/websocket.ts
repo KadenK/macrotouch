@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws'
 import type { Macro } from '../../types'
 import { handleMacroTrigger } from '../util/handleMacro'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 
 type MacroState = {
@@ -15,11 +16,34 @@ type WSMessage =
   | { type: 'macro-trigger'; id: string }
 
 export default defineNitroPlugin(() => {
-  const wss = new WebSocketServer({ port: 3001 })
-  const clients = new Set<any>()
+  // Run one websocket server once even if plugin runs in multiple contexts
+  if ((globalThis as any).__macroTouchWebSocketServerStarted) {
+    return
+  }
+  ;(globalThis as any).__macroTouchWebSocketServerStarted = true
 
-  // Path to the persistent state file
-  const stateFilePath = path.join(process.cwd(), 'data', 'state.json')
+  const WS_PORT = Number(process.env.WS_PORT || process.env.NUXT_WS_PORT || 3001)
+
+  const dataRoot =
+    process.env.MACROTOUCH_DATA_DIR || process.env.XDG_DATA_HOME || path.join(os.homedir(), '.macroTouch')
+  try {
+    fs.mkdirSync(dataRoot, { recursive: true })
+  } catch (err) {
+    console.error('[WebSocket] cannot create data directory', dataRoot, err)
+  }
+
+  const stateFilePath = path.join(dataRoot, 'state.json')
+
+  const wss = new WebSocketServer({ port: WS_PORT })
+  wss.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[WebSocket] port ${WS_PORT} already in use, skipping websocket server startup`)
+      return
+    }
+    throw err
+  })
+
+  const clients = new Set<any>()
 
   // Ensure the data directory exists
   try {

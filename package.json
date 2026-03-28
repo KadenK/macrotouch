@@ -2,6 +2,7 @@
   "name": "macrotouch",
   "type": "module",
   "private": true,
+  "version": "0.0.1",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "nuxt dev",
@@ -10,8 +11,8 @@
     "generate": "cross-env NUXT_HASH_ROUTER=true nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "electron:preview": "npm run generate && cross-env NODE_ENV=production electron .",
-    "dist": "npm run generate && electron-builder"
+    "electron:preview": "npm run build && cross-env NODE_ENV=production electron .",
+    "dist": "npm run build && cross-env NODE_ENV=production electron-builder"
   },
   "dependencies": {
     "@iconify-json/ic": "^1.2.4",
@@ -40,19 +41,22 @@
     "wait-on": "^9.0.4"
   },
   "build": {
+    "asar": false,
     "appId": "com.macrotouch.app",
     "productName": "MacroTouch",
+    "icon": "images/macrotouch-logo.png",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "electron/**/*",
-      ".output/public/**/*"
+      ".output/**/*"
     ],
     "linux": {
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "rpm"
       ]
     },
     "mac": {
@@ -65,5 +69,9 @@
         "nsis"
       ]
     }
+  },
+  "author": {
+    "name": "Kaden Keep",
+    "email": "me@kadenkeep.com"
   }
 }

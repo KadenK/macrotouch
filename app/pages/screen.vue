@@ -1,5 +1,14 @@
 <template>
-  <div class="screen-page">
+  <div
+    class="screen-page"
+    @pointerdown="onSwipeStart"
+    @pointermove="onSwipeMove"
+    @pointerup="onSwipeEnd"
+    @touchstart="onSwipeStart"
+    @touchmove="onSwipeMove"
+    @touchend="onSwipeEnd"
+    @click.capture="onCaptureClick"
+  >
     <Screen v-if="currentScreenId" :screen-id="currentScreenId" :editable="false" />
     <div v-else class="empty-state">No screens available.</div>
 
@@ -33,8 +42,13 @@ const screenList = computed(() => store.getScreenList())
 
 const toastMessage = ref('')
 const showFullscreenHint = ref(false)
-let toastTimeout: ReturnType<typeof setTimeout> | null = null
+let toastTimeout: number | null = null
 let removeFullscreenChangeListener: (() => void) | null = null
+
+let swipeStartX = 0
+let swipeStartY = 0
+let swipeStartTime = 0
+const isSwiping = ref(false)
 
 const showToast = (message: string, duration = 3000) => {
   toastMessage.value = message
@@ -49,6 +63,113 @@ const showToast = (message: string, duration = 3000) => {
 
 const hideFullscreenHint = () => {
   showFullscreenHint.value = false
+}
+
+const cycleScreen = (direction: 1 | -1) => {
+  if (!screenList.value.length) return
+  if (!currentScreenId.value) {
+    currentScreenId.value = screenList.value[0]?.id ?? ''
+    return
+  }
+
+  const currentIndex = screenList.value.findIndex((s) => s.id === currentScreenId.value)
+  if (currentIndex === -1) {
+    currentScreenId.value = screenList.value[0]?.id ?? ''
+    return
+  }
+
+  const nextIndex = (currentIndex + direction + screenList.value.length) % screenList.value.length
+  const nextScreen = screenList.value[nextIndex]
+  if (!nextScreen) return
+
+  currentScreenId.value = nextScreen.id
+  showToast(`Screen: ${nextScreen.name}`, 1000)
+}
+
+const onSwipeStart = (event: TouchEvent | PointerEvent) => {
+  if (event instanceof TouchEvent) {
+    if (!event.touches.length) return
+    const touch = event.touches[0]
+    if (!touch) return
+    swipeStartX = touch.clientX
+    swipeStartY = touch.clientY
+  } else {
+    swipeStartX = event.clientX
+    swipeStartY = event.clientY
+  }
+  swipeStartTime = Date.now()
+}
+
+const onSwipeMove = (event: TouchEvent | PointerEvent) => {
+  let moveX = 0
+  let moveY = 0
+
+  if (event instanceof TouchEvent) {
+    if (!event.touches.length) return
+    const touch = event.touches[0]
+    if (!touch) return
+    moveX = touch.clientX
+    moveY = touch.clientY
+  } else {
+    moveX = event.clientX
+    moveY = event.clientY
+  }
+
+  const deltaX = moveX - swipeStartX
+  const deltaY = moveY - swipeStartY
+
+  if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+    isSwiping.value = true
+  }
+}
+
+const onSwipeEnd = (event: TouchEvent | PointerEvent) => {
+  if (swipeStartTime === 0) return
+
+  let endX = 0
+  let endY = 0
+
+  if (event instanceof TouchEvent) {
+    if (!event.changedTouches.length) return
+    const touch = event.changedTouches[0]
+    if (!touch) return
+    endX = touch.clientX
+    endY = touch.clientY
+  } else {
+    endX = event.clientX
+    endY = event.clientY
+  }
+
+  const deltaX = endX - swipeStartX
+  const deltaY = endY - swipeStartY
+  const deltaTime = Date.now() - swipeStartTime
+
+  swipeStartTime = 0
+
+  if (deltaTime > 600) return
+  if (Math.abs(deltaX) < 60) return
+  if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.5) return
+
+  if (deltaX < 0) {
+    // Swipe left => next screen
+    cycleScreen(1)
+  } else {
+    // Swipe right => previous screen
+    cycleScreen(-1)
+  }
+
+  // keep swipe block through this click/touch chain to avoid accidental macro activation
+  setTimeout(() => {
+    isSwiping.value = false
+  }, 0)
+}
+
+const onCaptureClick = (event: MouseEvent) => {
+  if (isSwiping.value) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    isSwiping.value = false
+  }
 }
 
 const onFullscreenHintGesture = async () => {
@@ -123,13 +244,13 @@ onMounted(() => {
         if (ready) {
           stop()
           if (screenList.value.length) {
-            currentScreenId.value = screenList.value[0].id
+            currentScreenId.value = screenList.value[0]?.id ?? ''
           }
         }
       },
     )
   } else if (screenList.value.length) {
-    currentScreenId.value = screenList.value[0].id
+    currentScreenId.value = screenList.value[0]?.id ?? ''
   }
 
   const onFullscreenChange = () => {
@@ -157,7 +278,7 @@ onBeforeUnmount(() => {
 
 watch(screenList, (list) => {
   if (!currentScreenId.value && list.length) {
-    currentScreenId.value = list[0].id
+    currentScreenId.value = list[0]?.id ?? ''
   }
 })
 </script>
@@ -167,6 +288,7 @@ watch(screenList, (list) => {
   width: 100%;
   height: 100%;
   max-width: 100%;
+  touch-action: pan-y;
   max-height: 100%;
   padding: 0;
   box-sizing: border-box;

@@ -36,6 +36,14 @@
       </div>
 
       <div class="setting-row">
+        <span>Swipe to change screens</span>
+        <label class="switch">
+          <input type="checkbox" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
         <span>Hide blank buttons</span>
         <label class="switch">
           <input type="checkbox" />
@@ -49,6 +57,14 @@
           <option>Landscape</option>
           <option>Portrait</option>
         </select>
+      </div>
+
+      <div class="setting-row">
+        <span>Attempt to Fullscreen</span>
+        <label class="switch">
+          <input type="checkbox" />
+          <span class="slider"></span>
+        </label>
       </div>
     </section>
 
@@ -64,14 +80,14 @@
           <input type="color" />
         </div>
 
-      <div class="setting-row">
-        <span>Grid size</span>
-        <div class="grid-size">
-          <input type="number" min="1" step="1" placeholder="Cols" />
-          <span class="grid-sep">×</span>
-          <input type="number" min="1" step="1" placeholder="Rows" />
+        <div class="setting-row">
+          <span>Grid size</span>
+          <div class="grid-size">
+            <input type="number" min="1" step="1" placeholder="Cols" />
+            <span class="grid-sep">×</span>
+            <input type="number" min="1" step="1" placeholder="Rows" />
+          </div>
         </div>
-      </div>
       </div>
     </section>
   </div>
@@ -129,8 +145,7 @@ select {
   padding: 0.45rem 2.25rem 0.45rem 0.75rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background:
-    var(--color-surface)
+  background: var(--color-surface)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     no-repeat;
   background-position: right 0.7rem center;
@@ -180,13 +195,13 @@ select {
 
 .slider::before {
   position: absolute;
-  content: "";
+  content: '';
   height: 18px;
   width: 18px;
   left: 3px;
   bottom: 3px;
   background: white;
-  transition: .25s;
+  transition: 0.25s;
   border-radius: 50%;
 }
 

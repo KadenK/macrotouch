@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @click.self="close">
+    <div v-if="isOpen" class="modal-overlay" @pointerdown.self="close">
       <div :class="['modal-container', { 'modal-container--fixed': fixedSize }]">
         <div class="modal-header">
           <h2 class="modal-title">{{ title }}</h2>

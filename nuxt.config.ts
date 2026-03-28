@@ -4,6 +4,12 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   css: ['~/assets/css/theme.css'],
 
+  app: {
+    head: {
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/_nuxt/assets/icons/logo.svg' }],
+    },
+  },
+
   postcss: {
     plugins: {
       'postcss-nested': {},
@@ -29,8 +35,24 @@ export default defineNuxtConfig({
     },
   },
 
+  // Runtime config for websocket port (customize with WS_PORT)
+  runtimeConfig: {
+    public: {
+      websocketPort: Number(process.env.WS_PORT || 3001),
+    },
+  },
+
   // Bind dev server to all interfaces for network access
   devServer: {
     host: '0.0.0.0',
+  },
+
+  icon: {
+    customCollections: [
+      {
+        prefix: 'mt',
+        dir: './app/assets/icons',
+      },
+    ],
   },
 })

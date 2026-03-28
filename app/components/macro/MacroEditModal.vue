@@ -16,7 +16,7 @@
         </select>
       </div>
 
-      <ActionFieldsForm
+      <ActionFields
         v-if="selectedActionFields.length > 0"
         v-model="actionParameters"
         :action-fields="selectedActionFields"
@@ -64,7 +64,6 @@ import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
-import ActionFieldsForm from '~/components/macro/ActionFieldsForm.vue'
 import type { Macro, Position, Icon } from '~/../types'
 import { createColor, colorFromHex, colorToHex } from '~/../types'
 import { IconSource } from '~/../types/macro'
