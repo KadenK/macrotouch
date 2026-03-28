@@ -22,12 +22,14 @@ import StringInput from '~/components/input/stringInput.vue'
 import FilepathInput from '~/components/input/filepathInput.vue'
 import ExecutablePathInput from '~/components/input/executablePathInput.vue'
 import EnumInput from '~/components/input/enumInput.vue'
+import KeyComboInput from '~/components/input/keyComboInput.vue'
 
 const controlComponent: Record<ActionType, Component> = {
   [ActionType.String]: StringInput,
   [ActionType.Filepath]: FilepathInput,
   [ActionType.ExecutablePath]: ExecutablePathInput,
   [ActionType.Enum]: EnumInput,
+  [ActionType.KeyCombo]: KeyComboInput,
 }
 
 const props = defineProps({

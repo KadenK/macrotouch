@@ -3,6 +3,7 @@ export enum ActionType {
   String = 'string',
   Enum = 'enum',
   ExecutablePath = 'executablePath',
+  KeyCombo = 'keyCombo',
 }
 
 export interface ActionField {

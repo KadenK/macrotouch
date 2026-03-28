@@ -1,4 +1,5 @@
 import { ActionType, type Action } from '../../types/index'
+import { executeSpawn } from './commandExecutor'
 
 const parseArguments = (value: unknown): string[] => {
   if (!value || typeof value !== 'string') return []
@@ -50,23 +51,28 @@ const action: Action = {
         return
       }
 
-      const { spawn } = await import('node:child_process')
-
       if (process.platform === 'darwin' && target.endsWith('.app')) {
-        const child = spawn('open', ['-a', target, ...(args.length > 0 ? ['--args', ...args] : [])], {
-          detached: true,
-          stdio: 'ignore',
-        })
-        child.unref()
+        const appCommand = `open -a "${target}" ${args.length > 0 ? `--args ${args.map((a) => `"${a}"`).join(' ')}` : ''}`
+        await executeSpawn(appCommand)
         return
       }
 
-      const child = spawn(target, args, {
-        detached: true,
-        stdio: 'ignore',
-        shell: process.platform === 'win32',
-      })
-      child.unref()
+      try {
+        // For regular executables, spawn directly to preserve detached semantics
+        const { spawn } = await import('node:child_process')
+        const child = spawn(target, args, {
+          detached: true,
+          stdio: 'ignore',
+          shell: process.platform === 'win32',
+        })
+        child.unref()
+        return
+      } catch (spawnError) {
+        // Fallback to commandExecutor for shell execution path
+        const wrapped = `${target} ${args.map((a) => `"${a}"`).join(' ')}`.trim()
+        await executeSpawn(wrapped)
+        return
+      }
     } catch (err) {
       console.error('LaunchApp.execute: failed to launch application', err)
     }

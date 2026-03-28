@@ -1,6 +1,6 @@
 'use strict'
 
-const { app, BrowserWindow, shell, ipcMain, screen, nativeImage } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, screen, nativeImage, dialog } = require('electron')
 const { spawn } = require('child_process')
 const http = require('http')
 const path = require('path')
@@ -162,6 +162,37 @@ app.whenReady().then(async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
     }
+  })
+
+  ipcMain.handle('dialog:selectExecutable', async () => {
+    const platform = process.platform
+    let defaultPath = undefined
+    let filters = []
+
+    if (platform === 'darwin') {
+      defaultPath = '/Applications'
+      filters = [{ name: 'Applications', extensions: ['app'] }]
+    } else if (platform === 'win32') {
+      defaultPath = process.env.SystemRoot || 'C:\\Windows'
+      filters = [{ name: 'Executables', extensions: ['exe', 'bat', 'cmd', 'com'] }]
+    } else {
+      // Linux and others
+      defaultPath = '/usr/bin'
+      filters = [{ name: 'Executables', extensions: ['exe', 'sh', 'desktop'] }]
+    }
+
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      title: 'Select executable or application',
+      defaultPath,
+      properties: ['openFile'],
+      filters,
+    })
+
+    if (canceled || !filePaths || filePaths.length === 0) {
+      return null
+    }
+
+    return filePaths[0]
   })
 })
 

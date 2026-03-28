@@ -18,4 +18,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on(channel, (_event, ...args) => callback(...args))
     }
   },
+  // Native dialog for executable/app selection
+  selectExecutable: async () => {
+    return ipcRenderer.invoke('dialog:selectExecutable')
+  },
 })

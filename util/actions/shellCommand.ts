@@ -1,5 +1,6 @@
 import { ActionType, type Action } from '../../types/index'
 import { getDefaultShell, getPlatform } from '../platform'
+import { executeCommand } from './commandExecutor'
 
 const action: Action = {
   actionId: 'shellCommand',
@@ -21,16 +22,7 @@ const action: Action = {
     try {
       const currentPlatform = getPlatform()
       console.log('ShellCommand running on platform:', currentPlatform)
-      const shell = getDefaultShell()
-      const { exec } = await import('node:child_process')
-      exec(command, { shell }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`ShellCommand execution failed for command: ${command}`, error)
-          return
-        }
-        if (stdout) console.log(`ShellCommand output: ${stdout}`)
-        if (stderr) console.warn(`ShellCommand error output: ${stderr}`)
-      })
+      await executeCommand(command)
     } catch (err) {
       console.error('ShellCommand.execute: failed to launch command', err)
     }
