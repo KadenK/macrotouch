@@ -6,7 +6,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "nuxt dev",
-    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development electron .\"",
     "build": "nuxt build",
     "generate": "cross-env NUXT_HASH_ROUTER=true nuxt generate",
     "preview": "nuxt preview",

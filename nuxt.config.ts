@@ -42,9 +42,10 @@ export default defineNuxtConfig({
     },
   },
 
-  // Bind dev server to all interfaces for network access
+  // Bind dev server to all interfaces for network access and use port 4321
   devServer: {
     host: '0.0.0.0',
+    port: 4321,
   },
 
   icon: {
