@@ -31,14 +31,16 @@
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
 import { createMacroScreen, createColor } from '~/../types'
 import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
 
 const store = useMacroStore()
+const { settings } = storeToRefs(store)
+
 const isEditModalOpen = ref(false)
-const title = ref('Dashboard')
 const currentScreenId = ref<string>('')
 
 const screenList = computed(() => store.getScreenList())
@@ -54,16 +56,13 @@ function openEditModal() {
 }
 
 function ensureScreenExists() {
-  const defaultIconColor = createColor(0, 0, 0)
-  const defaultBgColor = createColor(255, 255, 255)
-
   if (screenList.value.length === 0) {
     const defaultScreen = createMacroScreen(
-      'Screen 1',
-      { rows: 3, columns: 5 },
-      createColor(240, 240, 240),
-      defaultIconColor,
-      defaultBgColor,
+      'Screen',
+      { ...settings.value.defaultScreenSize },
+      { ...settings.value.defaultScreenBgColor },
+      createColor(0, 0, 0),
+      createColor(255, 255, 255),
     )
     store.addScreen(defaultScreen)
     currentScreenId.value = defaultScreen.id
@@ -95,18 +94,16 @@ watch(screenList, (screens) => {
 })
 
 function createNewScreen() {
-  const defaultIconColor = createColor(0, 0, 0)
-  const defaultBgColor = createColor(255, 255, 255)
-
   const newScreen = createMacroScreen(
-    'Screen 1',
-    { rows: 3, columns: 5 },
-    createColor(240, 240, 240),
-    defaultIconColor,
-    defaultBgColor,
+    'Screen',
+    { ...settings.value.defaultScreenSize },
+    { ...settings.value.defaultScreenBgColor },
+    createColor(0, 0, 0),
+    createColor(255, 255, 255),
   )
   store.addScreen(newScreen)
   currentScreenId.value = newScreen.id
+  isEditModalOpen.value = true
 }
 
 function deleteCurrentScreen() {

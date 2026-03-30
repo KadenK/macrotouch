@@ -1,7 +1,26 @@
-<!-- components/screen/ScreenEditModal.vue -->
 <template>
   <Modal v-model="isOpen" title="Edit Screen" :fixed-size="true">
     <div class="edit-form">
+      <div class="form-group">
+        <label>Screen Name</label>
+        <input v-model="editForm.name" type="text" class="text-input" placeholder="Screen name" />
+      </div>
+
+      <div class="form-group">
+        <label>Grid Size</label>
+        <div class="grid-size-inputs">
+          <div class="grid-size-field">
+            <label class="sub-label">Rows</label>
+            <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
+          </div>
+          <span class="grid-divider">×</span>
+          <div class="grid-size-field">
+            <label class="sub-label">Columns</label>
+            <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+          </div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label>Screen Background Color</label>
         <input v-model="editForm.bgColorHex" type="color" />
@@ -52,16 +71,21 @@ const isOpen = computed({
 })
 
 const editForm = ref({
+  name: '',
+  rows: 3,
+  columns: 5,
   bgColorHex: '',
   defaultIconColorHex: '',
   defaultBgColorHex: '',
 })
 
-// Load screen data when modal opens
 watch(isOpen, (open) => {
   if (!open || !screen.value) return
   const s = screen.value
   editForm.value = {
+    name: s.name ?? '',
+    rows: s.size?.rows ?? 3,
+    columns: s.size?.columns ?? 5,
     bgColorHex: colorToHex(s.backgroundColor),
     defaultIconColorHex: s.defaultMacroIconColor ? colorToHex(s.defaultMacroIconColor) : '#000000',
     defaultBgColorHex: s.defaultMacroBackgroundColor ? colorToHex(s.defaultMacroBackgroundColor) : '#ffffff',
@@ -77,6 +101,11 @@ function saveScreen() {
 
   const updatedScreen = {
     ...screen.value,
+    name: editForm.value.name,
+    size: {
+      rows: Math.max(1, Math.min(20, editForm.value.rows)),
+      columns: Math.max(1, Math.min(20, editForm.value.columns)),
+    },
     backgroundColor: colorFromHex(editForm.value.bgColorHex),
     defaultMacroIconColor: colorFromHex(editForm.value.defaultIconColorHex),
     defaultMacroBackgroundColor: colorFromHex(editForm.value.defaultBgColorHex),
@@ -95,25 +124,74 @@ function saveScreen() {
   flex-direction: column;
   gap: 1rem;
 }
+
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
-.form-group label {
+
+.form-group > label {
   font-weight: 600;
   font-size: 0.9rem;
   color: #374151;
 }
+
+.text-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  color: #111827;
+  background: white;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.grid-size-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.grid-size-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sub-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.number-input {
+  width: 5rem;
+  text-align: center;
+}
+
+.grid-divider {
+  font-size: 1.25rem;
+  color: #9ca3af;
+  padding-bottom: 0.4rem;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 1rem;
 }
+
 .right-actions {
   display: flex;
   gap: 0.5rem;
 }
+
 .cancel-btn,
 .save-btn {
   padding: 0.5rem 1rem;
@@ -121,9 +199,11 @@ function saveScreen() {
   border-radius: 4px;
   cursor: pointer;
 }
+
 .cancel-btn {
   background-color: #e5e7eb;
 }
+
 .save-btn {
   background-color: #3b82f6;
   color: white;

@@ -4,39 +4,61 @@ import type { Action, Color, Macro, MacroScreen, Position, ScreenListItem, Scree
 import { createMacroScreen, createColor } from '~/../types'
 import { actions as actionList } from '~/../util/actions'
 
+export interface MacroSettings {
+  defaultScreenBgColor: Color
+  defaultScreenSize: { rows: number; columns: number }
+  swipeToChangeScreens: boolean
+  attemptFullscreen: boolean
+}
+
+type BroadcastData =
+  | { macros: Record<string, Macro>; screens: Record<string, MacroScreen>; settings: MacroSettings }
+  | { type: 'macro-trigger'; id: string }
+
+const DEFAULT_SETTINGS: MacroSettings = {
+  defaultScreenBgColor: createColor(240, 240, 240),
+  defaultScreenSize: { rows: 3, columns: 5 },
+  swipeToChangeScreens: true,
+  attemptFullscreen: true,
+}
+
 export const useMacroStore = defineStore('Macro', () => {
   const macros = ref<Record<string, Macro>>({})
   const screens = ref<Record<string, MacroScreen>>({})
+  const settings = ref<MacroSettings>({
+    ...DEFAULT_SETTINGS,
+    defaultScreenSize: { ...DEFAULT_SETTINGS.defaultScreenSize },
+  })
 
   const isApplyingRemoteState = ref(false)
   const isReady = ref(false)
 
   const actions = ref<Action[]>(actionList)
 
-  const broadcastFn = ref<
-    | ((
-        data:
-          | { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }
-          | { type: 'macro-trigger'; id: string },
-      ) => void)
-    | null
-  >(null)
+  const broadcastFn = ref<((data: BroadcastData) => void) | null>(null)
 
-  function setBroadcastFn(
-    fn: (
-      data:
-        | { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }
-        | { type: 'macro-trigger'; id: string },
-    ) => void,
-  ) {
+  function setBroadcastFn(fn: (data: BroadcastData) => void) {
     broadcastFn.value = fn
   }
 
-  function setState(state: { macros: Record<string, Macro>; screens: Record<string, MacroScreen> }) {
+  function setState(state: {
+    macros: Record<string, Macro>
+    screens: Record<string, MacroScreen>
+    settings?: Partial<MacroSettings>
+  }) {
     isApplyingRemoteState.value = true
 
     macros.value = state.macros || {}
     screens.value = {}
+
+    if (state.settings) {
+      settings.value = {
+        defaultScreenBgColor: state.settings.defaultScreenBgColor ?? { ...DEFAULT_SETTINGS.defaultScreenBgColor },
+        defaultScreenSize: state.settings.defaultScreenSize ?? { ...DEFAULT_SETTINGS.defaultScreenSize },
+        swipeToChangeScreens: state.settings.swipeToChangeScreens ?? DEFAULT_SETTINGS.swipeToChangeScreens,
+        attemptFullscreen: state.settings.attemptFullscreen ?? DEFAULT_SETTINGS.attemptFullscreen,
+      }
+    }
 
     if (state.screens) {
       for (const [id, rawScreen] of Object.entries(state.screens)) {
@@ -74,7 +96,12 @@ export const useMacroStore = defineStore('Macro', () => {
 
   function maybeBroadcast() {
     if (isApplyingRemoteState.value || !isReady.value) return
-    broadcastFn.value?.({ macros: macros.value, screens: screens.value })
+    broadcastFn.value?.({ macros: macros.value, screens: screens.value, settings: settings.value })
+  }
+
+  function updateSettings(updated: Partial<MacroSettings>) {
+    settings.value = { ...settings.value, ...updated }
+    maybeBroadcast()
   }
 
   function getMacro(id: string): Macro | undefined {
@@ -103,27 +130,20 @@ export const useMacroStore = defineStore('Macro', () => {
     macros.value = remainingMacros
   }
 
-  // It is normally expected that when adding a screen, it is done without macros, and then macros are added separately.
-  // If macroIds are contained within the screen, they must be already added to the store.
-  // If an array of macros is provided, they will be added to the store with the assumption that the ids match those in the screen.
-  // If a 2D array of macros is provided, they will be added to the store and associated with the screen in the same order.
   function addScreen(screen: MacroScreen, macroArrayOrRows?: Macro[] | Macro[][]) {
-    // If macroRows are provided
     if (Array.isArray(macroArrayOrRows) && macroArrayOrRows.length > 0 && Array.isArray(macroArrayOrRows[0])) {
       const macroRows = macroArrayOrRows as Macro[][]
       const rows: ScreenRow[] = []
       for (const row of macroRows) {
         const currentRow: ScreenRow = { macrosIds: [] }
         for (const macro of row) {
-          _addMacro(macro) // Add to store
-          currentRow.macrosIds.push(macro.id) // Add to row
+          _addMacro(macro)
+          currentRow.macrosIds.push(macro.id)
         }
-        rows.push(currentRow) // Add to screen
+        rows.push(currentRow)
       }
       screen.macroRows = rows
     } else if (Array.isArray(macroArrayOrRows) && macroArrayOrRows.length > 0) {
-      // Else if a flat array of macros is provided
-      // Add to store and screen with assumption that ids match those in the screen
       for (const macro of macroArrayOrRows as Macro[]) {
         _addMacro(macro)
       }
@@ -144,7 +164,6 @@ export const useMacroStore = defineStore('Macro', () => {
     }))
   }
 
-  // Deletes the screen and all macros associated with it.
   function deleteScreen(screenOrScreenId: string | MacroScreen) {
     const id = resolveScreenId(screenOrScreenId)
     if (!screens.value[id]) {
@@ -220,7 +239,6 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     const macroId = screen.macroRows[from.row]!.macrosIds[from.column]
     if (macroId) {
-      // Keep the macro in the store; just change the screen cell reference.
       screen.macroRows[from.row]!.macrosIds[from.column] = ''
       screen.macroRows[to.row]!.macrosIds[to.column] = macroId
       maybeBroadcast()
@@ -230,6 +248,7 @@ export const useMacroStore = defineStore('Macro', () => {
   return {
     macros,
     screens,
+    settings,
     actions,
     isReady,
     getMacro,
@@ -245,6 +264,7 @@ export const useMacroStore = defineStore('Macro', () => {
     triggerMacro,
     setState,
     setBroadcastFn,
+    updateSettings,
   }
 })
 

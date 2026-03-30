@@ -38,7 +38,7 @@
       <div class="setting-row">
         <span>Swipe to change screens</span>
         <label class="switch">
-          <input type="checkbox" />
+          <input type="checkbox" v-model="form.swipeToChangeScreens" />
           <span class="slider"></span>
         </label>
       </div>
@@ -62,7 +62,7 @@
       <div class="setting-row">
         <span>Attempt to Fullscreen</span>
         <label class="switch">
-          <input type="checkbox" />
+          <input type="checkbox" v-model="form.attemptFullscreen" />
           <span class="slider"></span>
         </label>
       </div>
@@ -77,23 +77,92 @@
 
         <div class="setting-row">
           <span>Background color</span>
-          <input type="color" />
+          <input type="color" v-model="form.bgColorHex" />
         </div>
 
         <div class="setting-row">
           <span>Grid size</span>
-          <div class="grid-size">
-            <input type="number" min="1" step="1" placeholder="Cols" />
-            <span class="grid-sep">×</span>
-            <input type="number" min="1" step="1" placeholder="Rows" />
+          <div class="grid-size-inputs">
+            <div class="grid-size-field">
+              <label class="sub-label">Rows</label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                class="grid-input"
+                v-model.number="form.rows"
+              />
+            </div>
+            <span class="grid-divider">×</span>
+            <div class="grid-size-field">
+              <label class="sub-label">Columns</label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                step="1"
+                class="grid-input"
+                v-model.number="form.columns"
+              />
+            </div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- Actions -->
+    <div class="page-actions">
+      <button class="cancel-btn" @click="cancel">Cancel</button>
+      <button class="save-btn" @click="save">Save</button>
+    </div>
   </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+import { ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useMacroStore } from '~/stores/macro'
+import { colorFromHex, colorToHex } from '~/../types'
+import { useRouter } from 'vue-router'
+
+const store = useMacroStore()
+const { settings } = storeToRefs(store)
+const router = useRouter()
+
+function buildForm() {
+  return {
+    bgColorHex: colorToHex(settings.value.defaultScreenBgColor),
+    rows: settings.value.defaultScreenSize.rows,
+    columns: settings.value.defaultScreenSize.columns,
+    swipeToChangeScreens: settings.value.swipeToChangeScreens,
+    attemptFullscreen: settings.value.attemptFullscreen,
+  }
+}
+
+const form = ref(buildForm())
+
+watch(settings, () => {
+  form.value = buildForm()
+}, { deep: true })
+
+function save() {
+  store.updateSettings({
+    defaultScreenBgColor: colorFromHex(form.value.bgColorHex),
+    defaultScreenSize: {
+      rows: Math.max(1, Math.min(20, form.value.rows)),
+      columns: Math.max(1, Math.min(20, form.value.columns)),
+    },
+    swipeToChangeScreens: form.value.swipeToChangeScreens,
+    attemptFullscreen: form.value.attemptFullscreen,
+  })
+  router.push('/home')
+}
+
+function cancel() {
+  form.value = buildForm()
+}
+</script>
 
 <style lang="postcss" scoped>
 .settings-page {
@@ -152,25 +221,85 @@ select {
   background-size: 1rem 1rem;
 }
 
-.grid-size {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+/* Grid size */
+.grid-size-inputs {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
 }
 
-.grid-size input {
-  width: 4.5rem;
-  padding: 0.45rem 0.6rem;
+.grid-size-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sub-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.grid-input {
+  width: 5rem;
+  text-align: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  color: #111827;
+  background: white;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.grid-divider {
+  font-size: 1.25rem;
+  color: #9ca3af;
+  padding-bottom: 0.4rem;
+}
+
+/* Page actions */
+.page-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.cancel-btn,
+.save-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
   border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.cancel-btn {
+  background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  color: var(--color-ink-2);
+
+  &:hover {
+    background-color: var(--color-primary-50);
+  }
 }
 
-.grid-sep {
-  color: var(--color-muted);
-  font-weight: 600;
+.save-btn {
+  background-color: var(--color-primary);
+  color: white;
+
+  &:hover {
+    filter: brightness(1.1);
+  }
 }
 
+/* Toggles */
 .switch {
   position: relative;
   display: inline-block;

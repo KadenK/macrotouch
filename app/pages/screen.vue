@@ -12,6 +12,11 @@
     <Screen v-if="currentScreenId" :screen-id="currentScreenId" :editable="false" />
     <div v-else class="empty-state">No screens available.</div>
 
+    <template v-if="!settings.swipeToChangeScreens && screenList.length > 1">
+      <button class="nav-arrow nav-arrow--left" @click.stop="cycleScreen(-1)">‹</button>
+      <button class="nav-arrow nav-arrow--right" @click.stop="cycleScreen(1)">›</button>
+    </template>
+
     <transition name="toast-fade">
       <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
     </transition>
@@ -28,6 +33,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import Screen from '~/components/screen/screen.vue'
 
@@ -36,6 +42,7 @@ definePageMeta({
 })
 
 const store = useMacroStore()
+const { settings } = storeToRefs(store)
 
 const currentScreenId = ref('')
 const screenList = computed(() => store.getScreenList())
@@ -146,19 +153,18 @@ const onSwipeEnd = (event: TouchEvent | PointerEvent) => {
 
   swipeStartTime = 0
 
+  if (!settings.value.swipeToChangeScreens) return
+
   if (deltaTime > 600) return
   if (Math.abs(deltaX) < 60) return
   if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.5) return
 
   if (deltaX < 0) {
-    // Swipe left => next screen
     cycleScreen(1)
   } else {
-    // Swipe right => previous screen
     cycleScreen(-1)
   }
 
-  // keep swipe block through this click/touch chain to avoid accidental macro activation
   setTimeout(() => {
     isSwiping.value = false
   }, 0)
@@ -191,8 +197,6 @@ const tryEnterFullscreen = async () => {
 
   const request = async (el: Element) => {
     try {
-      // Some browsers (e.g., Android Chrome) have better support when requesting fullscreen
-      // on the <body> element rather than <html>.
       await (el as any).requestFullscreen?.({ navigationUI: 'hide' })
       return true
     } catch (e) {
@@ -219,7 +223,6 @@ const requestFullscreenOnGesture = () => {
   showFullscreenHint.value = true
   showToast('Tap anywhere to enter fullscreen')
 
-  // Keep listeners as a backup in case the overlay doesn't capture the gesture.
   const onUserGesture = async () => {
     const entered = await tryEnterFullscreen()
     if (entered) {
@@ -265,11 +268,13 @@ onMounted(() => {
     document.removeEventListener('fullscreenchange', onFullscreenChange)
   }
 
-  tryEnterFullscreen().then((entered) => {
-    if (!entered) {
-      requestFullscreenOnGesture()
-    }
-  })
+  if (settings.value.attemptFullscreen) {
+    tryEnterFullscreen().then((entered) => {
+      if (!entered) {
+        requestFullscreenOnGesture()
+      }
+    })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -301,6 +306,43 @@ watch(screenList, (list) => {
 
 .empty-state {
   color: #6b7280;
+}
+
+.nav-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.25);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  &:active {
+    background: rgba(0, 0, 0, 0.6);
+  }
+}
+
+.nav-arrow--left {
+  left: 0.75rem;
+}
+
+.nav-arrow--right {
+  right: 0.75rem;
 }
 
 .toast {
