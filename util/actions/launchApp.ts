@@ -3,18 +3,15 @@ import { executeSpawn } from './commandExecutor'
 
 const parseArguments = (value: unknown): string[] => {
   if (!value || typeof value !== 'string') return []
-
   const args: string[] = []
   const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g
   let match: RegExpExecArray | null
-
   while ((match = pattern.exec(value)) !== null) {
     const arg = match[1] ?? match[2] ?? match[3]
     if (arg) {
       args.push(arg)
     }
   }
-
   return args
 }
 
@@ -45,25 +42,50 @@ const action: Action = {
     }
 
     try {
+      // Handle URLs
       if (isUrl(target)) {
-        const { shell } = await import('electron')
-        await shell.openExternal(target)
+        try {
+          const electron = await import('electron')
+          if (electron?.shell?.openExternal) {
+            await electron.shell.openExternal(target)
+            return
+          }
+        } catch {
+          // electron not available in this context, fall through to platform command
+        }
+        if (process.platform === 'win32') {
+          await executeSpawn(`start "" "${target}"`)
+        } else if (process.platform === 'darwin') {
+          await executeSpawn(`open "${target}"`)
+        } else {
+          await executeSpawn(`xdg-open "${target}"`)
+        }
         return
       }
 
+      // Handle macOS .app bundles
       if (process.platform === 'darwin' && target.endsWith('.app')) {
         const appCommand = `open -a "${target}" ${args.length > 0 ? `--args ${args.map((a) => `"${a}"`).join(' ')}` : ''}`
         await executeSpawn(appCommand)
         return
       }
 
+      // Handle Windows executables
+      if (process.platform === 'win32') {
+        const quotedTarget = `"${target}"`
+        const argsStr = args.length > 0 ? ` ${args.map((a) => `"${a}"`).join(' ')}` : ''
+        const appCommand = `start "" ${quotedTarget}${argsStr}`
+        await executeSpawn(appCommand)
+        return
+      }
+
+      // Handle Linux / macOS raw binaries
       try {
-        // For regular executables, spawn directly to preserve detached semantics
         const { spawn } = await import('node:child_process')
         const child = spawn(target, args, {
           detached: true,
           stdio: 'ignore',
-          shell: process.platform === 'win32',
+          shell: false,
         })
         child.unref()
         return
