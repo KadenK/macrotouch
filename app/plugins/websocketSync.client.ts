@@ -1,5 +1,6 @@
 import { useMacroStore } from '~/stores/macro'
 import { useWebSocket } from '~/composables/useWebSocket'
+import type { WebSocketState } from '../../types'
 
 export default defineNuxtPlugin(() => {
   const store = useMacroStore()
@@ -8,10 +9,12 @@ export default defineNuxtPlugin(() => {
   // When the store updates, broadcast state changes to the server.
   // macro-trigger events go directly to server; state updates are wrapped.
   store.setBroadcastFn((data) => {
-    if (data && typeof data === 'object' && (data as any).type === 'macro-trigger') {
-      ws.send(data as any)
+    if (typeof data === 'object' && data !== null && 'type' in data && data.type === 'macro-trigger') {
+      ws.send(data)
+    } else if (typeof data === 'object' && data !== null && 'macros' in data && 'screens' in data) {
+      ws.send({ type: 'state-update', state: data as WebSocketState })
     } else {
-      ws.send({ type: 'state-update', state: data })
+      console.warn('Ignoring unsupported broadcast payload')
     }
   })
 

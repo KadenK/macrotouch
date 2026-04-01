@@ -1,17 +1,38 @@
 'use strict'
 
-const { app, BrowserWindow, shell, ipcMain, screen, nativeImage, dialog } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, screen, nativeImage, dialog, Notification } = require('electron')
 const { spawn } = require('child_process')
+const fs = require('fs')
 const http = require('http')
 const path = require('path')
 
 const appIconPath = path.join(__dirname, '..', 'images', 'macrotouch-logo.png')
 const appIcon = nativeImage.createFromPath(appIconPath)
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore()
+      }
+      mainWindow.focus()
+      return
+    }
+
+    if (app.isReady()) {
+      createWindow()
+    }
+  })
+}
+
 // Keep a global reference to prevent garbage collection
 let mainWindow = null
 
 let nuxtProcess = null
+let shutdownInProgress = false
 // For external client access, bind to all interfaces. For local app URL, use localhost.
 const SERVER_BIND_HOST = '0.0.0.0'
 const LOCAL_URL_HOST = '127.0.0.1'
@@ -31,7 +52,7 @@ function waitForServer(host, port, timeout = 15000) {
         res.resume()
         resolve()
       })
-      req.on('error', (err) => {
+      req.on('error', () => {
         if (Date.now() - start > timeout) {
           reject(new Error(`Server did not start on ${host}:${port} in ${timeout}ms`))
         } else {
@@ -44,6 +65,73 @@ function waitForServer(host, port, timeout = 15000) {
   })
 }
 
+function stopNuxtServer() {
+  if (!nuxtProcess || shutdownInProgress) {
+    return
+  }
+
+  shutdownInProgress = true
+
+  const { pid } = nuxtProcess
+  if (!pid) {
+    nuxtProcess = null
+    shutdownInProgress = false
+    return
+  }
+
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/PID', `${pid}`, '/T', '/F'], {
+      stdio: 'ignore',
+    })
+
+    killer.on('exit', () => {
+      nuxtProcess = null
+      shutdownInProgress = false
+    })
+
+    killer.on('error', (err) => {
+      console.error('Failed to stop Nuxt server tree:', err)
+      try {
+        nuxtProcess.kill('SIGTERM')
+      } catch (killErr) {
+        console.error('Failed to stop Nuxt server process:', killErr)
+      }
+      nuxtProcess = null
+      shutdownInProgress = false
+    })
+
+    return
+  }
+
+  try {
+    process.kill(-pid, 'SIGTERM')
+  } catch (err) {
+    console.error('Failed to stop Nuxt server process group:', err)
+    try {
+      nuxtProcess.kill('SIGTERM')
+    } catch (killErr) {
+      console.error('Failed to stop Nuxt server process:', killErr)
+    }
+  }
+
+  setTimeout(() => {
+    if (nuxtProcess && nuxtProcess.pid === pid) {
+      try {
+        process.kill(-pid, 'SIGKILL')
+      } catch {
+        // Ignore if the process group already exited.
+      }
+      try {
+        nuxtProcess.kill('SIGKILL')
+      } catch {
+        // Ignore if the process already exited.
+      }
+    }
+    nuxtProcess = null
+    shutdownInProgress = false
+  }, 1500)
+}
+
 async function startNuxtServer() {
   if (isDevelopmentMode()) {
     return
@@ -54,14 +142,35 @@ async function startNuxtServer() {
   }
 
   const appRoot = app.isPackaged ? app.getAppPath() : path.join(__dirname, '..')
-  const runner = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+  const serverEntry = path.join(appRoot, '.output', 'server', 'index.mjs')
   console.log(`Starting Nuxt server from ${appRoot} on ${SERVER_BIND_HOST}:${LOCAL_PORT}`)
 
-  nuxtProcess = spawn(runner, ['nuxi', 'preview', '--port', `${LOCAL_PORT}`], {
-    cwd: appRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, NODE_ENV: 'production', NITRO_HOST: SERVER_BIND_HOST },
-  })
+  if (fs.existsSync(serverEntry)) {
+    nuxtProcess = spawn(process.execPath, [serverEntry], {
+      cwd: appRoot,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      detached: process.platform !== 'win32',
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '1',
+        NODE_ENV: 'production',
+        NITRO_HOST: SERVER_BIND_HOST,
+        PORT: `${LOCAL_PORT}`,
+      },
+    })
+  } else {
+    const runner = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+    nuxtProcess = spawn(runner, ['nuxi', 'preview', '--port', `${LOCAL_PORT}`], {
+      cwd: appRoot,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      detached: process.platform !== 'win32',
+      env: { ...process.env, NODE_ENV: 'production', NITRO_HOST: SERVER_BIND_HOST },
+    })
+  }
+
+  if (process.platform !== 'win32') {
+    nuxtProcess.unref()
+  }
 
   nuxtProcess.stdout.on('data', (data) => {
     console.log(`[nuxt] ${data.toString().trim()}`)
@@ -77,6 +186,21 @@ async function startNuxtServer() {
 
   nuxtProcess.on('error', (err) => {
     console.error('Nuxt preview process failed:', err)
+  })
+
+  nuxtProcess.on('message', (message) => {
+    if (!message || typeof message !== 'object' || message.type !== 'notification') {
+      return
+    }
+
+    const title = typeof message.title === 'string' && message.title.trim() ? message.title.trim() : 'MacroTouch'
+    const body = typeof message.message === 'string' ? message.message : ''
+
+    try {
+      new Notification({ title, body, silent: false }).show()
+    } catch (err) {
+      console.error('Failed to show notification from Nuxt server:', err)
+    }
   })
 
   await waitForServer(LOCAL_URL_HOST, LOCAL_PORT)
@@ -194,18 +318,26 @@ app.whenReady().then(async () => {
 
     return filePaths[0]
   })
+
+  // Notification delivery comes from the Nuxt subprocess over child-process IPC.
 })
 
 app.on('window-all-closed', () => {
   // On macOS, keep the app running until Command+Q
   if (process.platform !== 'darwin') {
+    stopNuxtServer()
     app.quit()
   }
 })
 
 app.on('before-quit', () => {
-  if (nuxtProcess) {
-    nuxtProcess.kill()
-    nuxtProcess = null
-  }
+  stopNuxtServer()
+})
+
+process.on('SIGINT', () => {
+  stopNuxtServer()
+})
+
+process.on('SIGTERM', () => {
+  stopNuxtServer()
 })

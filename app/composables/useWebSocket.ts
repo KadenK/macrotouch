@@ -1,11 +1,9 @@
 import { useRuntimeConfig } from '#app'
-
-type WebSocketMessage =
-  | { type: 'state'; state: { macros: Record<string, any>; screens: Record<string, any> } }
-  | { type: 'state-update'; state: { macros: Record<string, any>; screens: Record<string, any> } }
+import { WEBSOCKET_PORT } from '../../shared/websocket'
+import type { WebSocketMessage, WebSocketState } from '../../types'
 
 type WebSocketHandlers = {
-  state?: (state: { macros: Record<string, any>; screens: Record<string, any> }) => void
+  state?: (state: WebSocketState) => void
   open?: () => void
   close?: () => void
   error?: (error: Event) => void
@@ -21,7 +19,7 @@ const createWebSocket = () => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.hostname
-    const port = useRuntimeConfig().public.websocketPort || 3001
+    const port = useRuntimeConfig().public.websocketPort || WEBSOCKET_PORT
     ws.value = new WebSocket(`${protocol}//${host}:${port}`)
 
     ws.value.onopen = () => {
@@ -39,7 +37,7 @@ const createWebSocket = () => {
         return
       }
 
-      if (!data || typeof data !== 'object' || typeof (data as any).type !== 'string') return
+      if (!data || typeof data !== 'object' || !('type' in data)) return
 
       if (data.type === 'state') {
         handlers.state?.(data.state)
@@ -72,7 +70,7 @@ const createWebSocket = () => {
   }
 
   const on = <T extends keyof WebSocketHandlers>(event: T, handler: NonNullable<WebSocketHandlers[T]>) => {
-    handlers[event] = handler as any
+    handlers[event] = handler
   }
 
   return {

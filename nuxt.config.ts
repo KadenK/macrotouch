@@ -1,3 +1,5 @@
+import { WEBSOCKET_PORT } from './shared/websocket'
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
@@ -38,7 +40,7 @@ export default defineNuxtConfig({
   // Runtime config for websocket port (customize with WS_PORT)
   runtimeConfig: {
     public: {
-      websocketPort: Number(process.env.WS_PORT || 3001),
+      websocketPort: Number(process.env.WS_PORT || WEBSOCKET_PORT),
     },
   },
 

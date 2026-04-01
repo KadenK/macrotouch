@@ -1,28 +1,36 @@
 import { WebSocketServer } from 'ws'
-import type { Macro } from '../../types'
+import type { Macro, MacroState, WebSocketMessage } from '../../types'
 import { handleMacroTrigger } from '../util/handleMacro'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
+import { WEBSOCKET_PORT } from '../../shared/websocket'
 
-type MacroState = {
-  macros: Record<string, Macro>
-  screens: Record<string, unknown>
+type MacroTouchGlobalScope = typeof globalThis & {
+  __macroTouchWebSocketServerStarted?: boolean
+  broadcast?: (data: WebSocketMessage) => void
+  macroState?: MacroState
+  saveMacroState?: () => void
 }
 
-type WSMessage =
-  | { type: 'state'; state: MacroState }
-  | { type: 'state-update'; state: MacroState }
-  | { type: 'macro-trigger'; id: string }
+type WebSocketConnection = {
+  readyState: number
+  send(data: string): void
+  close(): void
+  on(event: 'message', listener: (message: { toString(): string }) => void): void
+  on(event: 'close', listener: () => void): void
+}
 
 export default defineNitroPlugin(() => {
   // Run one websocket server once even if plugin runs in multiple contexts
-  if ((globalThis as any).__macroTouchWebSocketServerStarted) {
+  const globalScope = globalThis as MacroTouchGlobalScope
+
+  if (globalScope.__macroTouchWebSocketServerStarted) {
     return
   }
-  ;(globalThis as any).__macroTouchWebSocketServerStarted = true
+  globalScope.__macroTouchWebSocketServerStarted = true
 
-  const WS_PORT = Number(process.env.WS_PORT || process.env.NUXT_WS_PORT || 3001)
+  const WS_PORT = Number(process.env.WS_PORT || process.env.NUXT_WS_PORT || WEBSOCKET_PORT)
 
   const dataRoot =
     process.env.MACROTOUCH_DATA_DIR || process.env.XDG_DATA_HOME || path.join(os.homedir(), '.macroTouch')
@@ -35,7 +43,7 @@ export default defineNitroPlugin(() => {
   const stateFilePath = path.join(dataRoot, 'state.json')
 
   const wss = new WebSocketServer({ port: WS_PORT })
-  wss.on('error', (err: any) => {
+  wss.on('error', (err: { code?: string }) => {
     if (err.code === 'EADDRINUSE') {
       console.warn(`[WebSocket] port ${WS_PORT} already in use, skipping websocket server startup`)
       return
@@ -43,7 +51,34 @@ export default defineNitroPlugin(() => {
     throw err
   })
 
-  const clients = new Set<any>()
+  const clients = new Set<WebSocketConnection>()
+  let isShuttingDown = false
+
+  const shutdown = () => {
+    if (isShuttingDown) {
+      return
+    }
+
+    isShuttingDown = true
+
+    for (const client of clients) {
+      try {
+        client.close()
+      } catch {
+        // Ignore shutdown errors.
+      }
+    }
+
+    try {
+      wss.close()
+    } catch {
+      // Ignore shutdown errors.
+    }
+  }
+
+  process.once('SIGINT', shutdown)
+  process.once('SIGTERM', shutdown)
+  process.once('beforeExit', shutdown)
 
   // Ensure the data directory exists
   try {
@@ -82,7 +117,7 @@ export default defineNitroPlugin(() => {
   }
 
   // Broadcast to all connected clients
-  const broadcast = (data: WSMessage) => {
+  const broadcast = (data: WebSocketMessage) => {
     clients.forEach((client) => {
       if (client.readyState === 1) {
         client.send(JSON.stringify(data))
@@ -91,23 +126,23 @@ export default defineNitroPlugin(() => {
   }
 
   // Expose state, broadcast, and save for API routes
-  ;(globalThis as any).broadcast = broadcast
-  ;(globalThis as any).macroState = state
-  ;(globalThis as any).saveMacroState = saveState
+  globalScope.broadcast = broadcast
+  globalScope.macroState = state
+  globalScope.saveMacroState = saveState
 
-  const sendState = (ws: any) => {
+  const sendState = (ws: WebSocketConnection) => {
     ws.send(JSON.stringify({ type: 'state', state }))
   }
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws: WebSocketConnection) => {
     clients.add(ws)
     console.log('WebSocket client connected')
 
     // Send current state immediately
     sendState(ws)
 
-    ws.on('message', async (message) => {
-      let data: WSMessage | undefined
+    ws.on('message', async (message: { toString(): string }) => {
+      let data: WebSocketMessage | undefined
       try {
         data = JSON.parse(message.toString())
       } catch (err) {
@@ -140,5 +175,9 @@ export default defineNitroPlugin(() => {
     })
   })
 
-  console.log('WebSocket server started on port 3001')
+  wss.on('close', () => {
+    shutdown()
+  })
+
+  console.log(`WebSocket server started on port ${WS_PORT}`)
 })

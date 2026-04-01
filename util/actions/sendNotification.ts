@@ -1,4 +1,9 @@
 import { ActionType, type Action } from '../../types/index'
+import type { NotificationMessage } from '../../types'
+
+type NotificationProcess = NodeJS.Process & {
+  send?: (message: NotificationMessage) => boolean
+}
 
 const action: Action = {
   actionId: 'sendNotification',
@@ -22,37 +27,17 @@ const action: Action = {
     const appName = 'MacroTouch'
 
     try {
-      const notifierModule = (await import(/* @vite-ignore */ 'node-notifier')) as {
-        default?: {
-          notify: (
-            options: { title: string; message: string; 'app-name'?: string },
-            callback?: (error?: Error) => void,
-          ) => void
-        }
-        notify?: (
-          options: { title: string; message: string; 'app-name'?: string },
-          callback?: (error?: Error) => void,
-        ) => void
-      }
-
-      const notifier = notifierModule.default ?? notifierModule
-      if (typeof notifier.notify !== 'function') {
-        console.warn('SendNotification.execute: notification provider is unavailable')
-        return
-      }
-
-      notifier.notify(
-        {
+      const childProcess = process as NotificationProcess
+      if (typeof childProcess.send === 'function') {
+        childProcess.send({
+          type: 'notification',
           title,
           message,
-          'app-name': appName,
-        },
-        (error) => {
-          if (error) {
-            console.error('SendNotification.execute: failed to show notification', error)
-          }
-        },
-      )
+          appName,
+        })
+        return
+      }
+      console.warn('SendNotification.execute: notification IPC is unavailable')
     } catch (err) {
       console.error('SendNotification.execute: failed to show notification', err)
     }

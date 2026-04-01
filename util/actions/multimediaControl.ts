@@ -1,5 +1,5 @@
 import { ActionType, type Action } from '../../types/index'
-import { getDefaultShell, getPlatform } from '../platform'
+import { getPlatform } from '../platform'
 import { executeCommand } from './commandExecutor'
 
 const options = ['PlayPause', 'NextTrack', 'PreviousTrack', 'Stop', 'VolumeUp', 'VolumeDown', 'Mute']
@@ -21,6 +21,8 @@ const action: Action = {
       console.warn('MultimediaControl.execute: missing or invalid control parameter')
       return
     }
+
+    console.log(`MultimediaControl.execute: ${control}`)
 
     const platform = getPlatform()
     let command = ''
@@ -57,25 +59,25 @@ const action: Action = {
     } else if (platform === 'linux') {
       switch (toLower) {
         case 'playpause':
-          command = 'playerctl play-pause'
+          command = '/usr/bin/playerctl play-pause'
           break
         case 'nexttrack':
-          command = 'playerctl next'
+          command = '/usr/bin/playerctl next'
           break
         case 'previoustrack':
-          command = 'playerctl previous'
+          command = '/usr/bin/playerctl previous'
           break
         case 'stop':
-          command = 'playerctl stop'
+          command = '/usr/bin/playerctl stop'
           break
         case 'volumeup':
-          command = 'pactl set-sink-volume @DEFAULT_SINK@ +5%'
+          command = '/usr/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%'
           break
         case 'volumedown':
-          command = 'pactl set-sink-volume @DEFAULT_SINK@ -5%'
+          command = '/usr/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%'
           break
         case 'mute':
-          command = 'pactl set-sink-mute @DEFAULT_SINK@ toggle'
+          command = '/usr/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle'
           break
         default:
           console.warn(`MultimediaControl.execute: unsupported control ${control}`)
@@ -124,7 +126,9 @@ const action: Action = {
           await executeCommand(cmd)
           return true
         } catch (err) {
-          // try next fallback
+          const stderr =
+            typeof err === 'object' && err && 'stderr' in err ? (err as { stderr?: string }).stderr : undefined
+          console.warn('MultimediaControl.execute: command failed', cmd, stderr || err)
         }
       }
       return false
@@ -133,24 +137,27 @@ const action: Action = {
     let commandsToTry = [command]
 
     if (platform === 'linux' && ['volumeup', 'volumedown', 'mute'].includes(toLower)) {
-      // Add common Linux mixer fallback commands if pactl is missing.
+      // Prefer PipeWire's native controller, then fall back to PulseAudio/ALSA tools.
       if (toLower === 'volumeup') {
         commandsToTry = [
-          'pactl set-sink-volume @DEFAULT_SINK@ +5%',
-          'amixer -D pulse sset Master 5%+',
-          'amixer sset Master 5%+',
+          '/usr/bin/wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+',
+          '/usr/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%',
+          '/usr/bin/amixer -D pulse sset Master 5%+',
+          '/usr/bin/amixer sset Master 5%+',
         ]
       } else if (toLower === 'volumedown') {
         commandsToTry = [
-          'pactl set-sink-volume @DEFAULT_SINK@ -5%',
-          'amixer -D pulse sset Master 5%-',
-          'amixer sset Master 5%-',
+          '/usr/bin/wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-',
+          '/usr/bin/pactl set-sink-volume @DEFAULT_SINK@ -5%',
+          '/usr/bin/amixer -D pulse sset Master 5%-',
+          '/usr/bin/amixer sset Master 5%-',
         ]
       } else if (toLower === 'mute') {
         commandsToTry = [
-          'pactl set-sink-mute @DEFAULT_SINK@ toggle',
-          'amixer -D pulse sset Master toggle',
-          'amixer sset Master toggle',
+          '/usr/bin/wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle',
+          '/usr/bin/pactl set-sink-mute @DEFAULT_SINK@ toggle',
+          '/usr/bin/amixer -D pulse sset Master toggle',
+          '/usr/bin/amixer sset Master toggle',
         ]
       }
     }

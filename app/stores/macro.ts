@@ -1,19 +1,19 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Action, Color, Macro, MacroScreen, Position, ScreenListItem, ScreenRow } from '~/../types'
+import type {
+  Action,
+  BroadcastData,
+  Color,
+  Macro,
+  MacroScreen,
+  MacroSettings,
+  MacroState,
+  Position,
+  ScreenListItem,
+  ScreenRow,
+} from '~/../types'
 import { createMacroScreen, createColor } from '~/../types'
 import { actions as actionList } from '~/../util/actions'
-
-export interface MacroSettings {
-  defaultScreenBgColor: Color
-  defaultScreenSize: { rows: number; columns: number }
-  swipeToChangeScreens: boolean
-  attemptFullscreen: boolean
-}
-
-type BroadcastData =
-  | { macros: Record<string, Macro>; screens: Record<string, MacroScreen>; settings: MacroSettings }
-  | { type: 'macro-trigger'; id: string }
 
 const DEFAULT_SETTINGS: MacroSettings = {
   defaultScreenBgColor: createColor(240, 240, 240),
@@ -41,11 +41,7 @@ export const useMacroStore = defineStore('Macro', () => {
     broadcastFn.value = fn
   }
 
-  function setState(state: {
-    macros: Record<string, Macro>
-    screens: Record<string, MacroScreen>
-    settings?: Partial<MacroSettings>
-  }) {
+  function setState(state: MacroState) {
     isApplyingRemoteState.value = true
 
     macros.value = state.macros || {}
