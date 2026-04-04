@@ -44,6 +44,16 @@ export default defineNuxtConfig({
     },
   },
 
+  // Prevent Electron runtime dependencies from being traced into Nuxt/Nitro builds on macOS
+  nitro: {
+    externals: {
+      external: ['electron'],
+      traceOptions: {
+        ignore: (path: string) => path.includes('/node_modules/electron/'),
+      },
+    },
+  },
+
   // Bind dev server to all interfaces for network access and use port 4321
   devServer: {
     host: '0.0.0.0',

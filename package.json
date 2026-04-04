@@ -45,7 +45,7 @@
     "asar": false,
     "appId": "com.macrotouch.app",
     "productName": "MacroTouch",
-    "icon": "images/macrotouch-logo.png",
+    "icon": "images/macrotouch-logo-512.png",
     "directories": {
       "output": "dist-electron"
     },
