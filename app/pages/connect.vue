@@ -19,7 +19,13 @@
       </div>
 
       <div v-else class="interface-list">
-        <div v-for="(iface, index) in networkInterfaces" :key="index" class="card interface-card">
+        <div
+          v-for="(iface, index) in networkInterfaces"
+          :key="index"
+          class="card interface-card"
+          :class="{ 'is-selected': index === selectedIndex }"
+          @click="selectedIndex = index"
+        >
           <div class="card-main">
             <div class="card-title">
               <span class="label">Interface</span>
@@ -34,13 +40,13 @@
 
             <div class="card-row">
               <span class="label">URL</span>
-              <a :href="iface.url" target="_blank" rel="noopener noreferrer" class="link">
+              <a :href="iface.url" target="_blank" rel="noopener noreferrer" class="link" @click.stop>
                 {{ iface.url }}
               </a>
             </div>
           </div>
 
-          <div class="qr">
+          <div v-if="index === selectedIndex" class="qr">
             <img v-if="qrCodes[iface.url]" :src="qrCodes[iface.url]" :alt="`QR code for ${iface.url}`" />
             <div v-else class="qr-placeholder">Generating QR…</div>
           </div>
@@ -51,9 +57,12 @@
 </template>
 
 <script lang="ts" setup>
+import { ref } from 'vue'
 import { useNetwork } from '../composables/getIPAddresses'
 
 const { networkInterfaces, qrCodes, loading, error } = useNetwork()
+
+const selectedIndex = ref(0)
 </script>
 
 <style scoped>
@@ -200,8 +209,31 @@ const { networkInterfaces, qrCodes, loading, error } = useNetwork()
   font-size: var(--text-sm);
 }
 
+.interface-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* single column by default */
+  gap: var(--space-6);
+  align-items: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.interface-card.is-selected {
+  grid-template-columns: minmax(0, 1fr) 220px; /* expand to show QR column */
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.interface-card:not(.is-selected):hover {
+  border-color: var(--color-primary);
+  opacity: 0.85;
+}
+
 @media (max-width: 900px) {
-  .interface-card {
+  .interface-card,
+  .interface-card.is-selected {
     grid-template-columns: 1fr;
   }
 

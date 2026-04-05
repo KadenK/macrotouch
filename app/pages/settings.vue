@@ -52,14 +52,6 @@
       </div>
 
       <div class="setting-row">
-        <span>Orientation</span>
-        <select>
-          <option>Landscape</option>
-          <option>Portrait</option>
-        </select>
-      </div>
-
-      <div class="setting-row">
         <span>Attempt to Fullscreen</span>
         <label class="switch">
           <input type="checkbox" v-model="form.attemptFullscreen" />
@@ -85,26 +77,12 @@
           <div class="grid-size-inputs">
             <div class="grid-size-field">
               <label class="sub-label">Rows</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                step="1"
-                class="grid-input"
-                v-model.number="form.rows"
-              />
+              <input type="number" min="1" max="20" step="1" class="grid-input" v-model.number="form.rows" />
             </div>
             <span class="grid-divider">×</span>
             <div class="grid-size-field">
               <label class="sub-label">Columns</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                step="1"
-                class="grid-input"
-                v-model.number="form.columns"
-              />
+              <input type="number" min="1" max="20" step="1" class="grid-input" v-model.number="form.columns" />
             </div>
           </div>
         </div>
@@ -142,9 +120,13 @@ function buildForm() {
 
 const form = ref(buildForm())
 
-watch(settings, () => {
-  form.value = buildForm()
-}, { deep: true })
+watch(
+  settings,
+  () => {
+    form.value = buildForm()
+  },
+  { deep: true },
+)
 
 function save() {
   store.updateSettings({
