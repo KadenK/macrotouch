@@ -37,6 +37,7 @@
       </div>
 
       <div class="modal-actions">
+        <button v-if="!pendingScreen" class="delete-btn" @click="deleteScreen">Delete</button>
         <div class="right-actions">
           <button class="cancel-btn" @click="closeModal">Cancel</button>
           <button class="save-btn" @click="saveScreen">Save</button>
@@ -50,20 +51,24 @@
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
+import type { MacroScreen } from '~/../types'
 import { colorFromHex, colorToHex } from '~/../types'
 
 const props = defineProps<{
   modelValue: boolean
   screenId: string
+  pendingScreen?: MacroScreen | null
 }>()
 
 const emit = defineEmits<{
-  'update:modelValue': (value: boolean) => void
-  saved: void
+  'update:modelValue': [value: boolean]
+  saved: [id: string]
+  deleted: []
+  cancel: []
 }>()
 
 const store = useMacroStore()
-const screen = computed(() => store.getScreen(props.screenId))
+const screen = computed(() => props.pendingScreen ?? store.getScreen(props.screenId))
 
 const isOpen = computed({
   get: () => props.modelValue,
@@ -93,13 +98,16 @@ watch(isOpen, (open) => {
 })
 
 function closeModal() {
+  emit('cancel')
   isOpen.value = false
 }
 
 function saveScreen() {
   if (!screen.value) return
 
-  const updatedScreen = {
+  const isNew = !!props.pendingScreen
+
+  const screenData = {
     ...screen.value,
     name: editForm.value.name,
     size: {
@@ -111,9 +119,23 @@ function saveScreen() {
     defaultMacroBackgroundColor: colorFromHex(editForm.value.defaultBgColorHex),
   }
 
-  store.updateScreen(updatedScreen)
-  emit('saved')
-  closeModal()
+  if (isNew) {
+    store.addScreen(screenData)
+  } else {
+    store.updateScreen(screenData)
+  }
+
+  emit('saved', screenData.id)
+  isOpen.value = false
+}
+
+function deleteScreen() {
+  if (!screen.value) return
+  if (confirm(`Are you sure you want to delete the screen "${screen.value.name}"?`)) {
+    store.deleteScreen(props.screenId)
+    emit('deleted')
+    isOpen.value = false
+  }
 }
 </script>
 
@@ -183,7 +205,8 @@ function saveScreen() {
 
 .modal-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 1rem;
 }
 
@@ -193,7 +216,8 @@ function saveScreen() {
 }
 
 .cancel-btn,
-.save-btn {
+.save-btn,
+.delete-btn {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 4px;
@@ -207,5 +231,14 @@ function saveScreen() {
 .save-btn {
   background-color: #3b82f6;
   color: white;
+}
+
+.delete-btn {
+  background-color: #ef4444;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #dc2626;
 }
 </style>

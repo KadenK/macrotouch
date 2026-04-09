@@ -24,16 +24,18 @@
 
       <div class="form-group">
         <label>Icon</label>
-        <div class="icon-preview" @click="openIconPicker">
-          <Icon
-            v-if="editForm.icon.source === 'LIBRARY'"
-            :name="`ic:${editForm.icon.value}`"
-            class="preview-icon"
-            :style="{ color: colorToHex(editForm.iconColor) }"
-          />
-          <span v-else class="preview-placeholder">?</span>
+        <div class="icon-row">
+          <div class="icon-preview" :style="{ background: iconPreviewBg }" @click="openIconPicker">
+            <Icon
+              v-if="editForm.icon.source === 'LIBRARY'"
+              :name="`ic:${editForm.icon.value}`"
+              class="preview-icon"
+              :style="{ color: colorToHex(editForm.iconColor) }"
+            />
+            <span v-else class="preview-placeholder">?</span>
+          </div>
+          <button class="small-btn" @click="openIconPicker">Choose Icon</button>
         </div>
-        <button class="small-btn" @click="openIconPicker">Choose Icon</button>
       </div>
 
       <div class="form-group">
@@ -78,8 +80,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
-  (event: 'saved'): void
-  (event: 'deleted'): void
+  (event: 'saved' | 'deleted'): void
 }>()
 
 const store = useMacroStore()
@@ -112,6 +113,13 @@ const editForm = ref({
   backgroundColor: createColor(255, 255, 255),
   iconColorHex: '#000000',
   bgColorHex: '#ffffff',
+})
+
+const iconPreviewBg = computed(() => {
+  const color = editForm.value.iconColor
+  // Relative luminance approximation
+  const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b
+  return luminance > 128 ? '#111827' : '#ffffff'
 })
 
 watch(isOpen, (open) => {
@@ -270,13 +278,23 @@ function deleteMacro() {
   color: #9ca3af;
 }
 
+.icon-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .small-btn {
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem;
+  width: 96px;
+  height: 32px;
   background-color: #e5e7eb;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  text-align: center;
+  line-height: 1.2;
 }
 
 .modal-actions {
