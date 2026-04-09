@@ -4,12 +4,7 @@
       <div class="section">
         <div class="screen-controls">
           <button class="btn btn-primary" @click="createNewScreen">Add Screen</button>
-          <button v-if="currentScreenId" class="btn btn-secondary" @click="openEditModal">
-            Edit Current Screen
-          </button>
-          <button v-if="screenList.length" class="btn btn-ghost" @click="deleteCurrentScreen">
-            Delete Current Screen
-          </button>
+          <button v-if="currentScreenId" class="btn btn-secondary" @click="openEditModal">Edit Current Screen</button>
         </div>
 
         <select v-if="screenList.length" v-model="currentScreenId" class="screen-select">
@@ -25,7 +20,14 @@
       </div>
     </div>
 
-    <ScreenEditModal v-model="isEditModalOpen" :screen-id="currentScreenId" />
+    <ScreenEditModal
+      v-model="isEditModalOpen"
+      :screen-id="currentScreenId"
+      :pending-screen="pendingNewScreen"
+      @saved="onScreenSaved"
+      @deleted="onScreenDeleted"
+      @update:model-value="(v) => { if (!v) pendingNewScreen = null }"
+    />
   </div>
 </template>
 
@@ -42,12 +44,9 @@ const { settings } = storeToRefs(store)
 
 const isEditModalOpen = ref(false)
 const currentScreenId = ref<string>('')
+const pendingNewScreen = ref<ReturnType<typeof createMacroScreen> | null>(null)
 
 const screenList = computed(() => store.getScreenList())
-
-function getCurrentScreenName(): string {
-  return screenList.value.find((s) => s.id === currentScreenId.value)?.name ?? 'Unknown'
-}
 
 function openEditModal() {
   if (currentScreenId.value) {
@@ -101,19 +100,16 @@ function createNewScreen() {
     createColor(0, 0, 0),
     createColor(255, 255, 255),
   )
-  store.addScreen(newScreen)
-  currentScreenId.value = newScreen.id
+  pendingNewScreen.value = newScreen
   isEditModalOpen.value = true
 }
 
-function deleteCurrentScreen() {
-  if (!currentScreenId.value) return
+function onScreenSaved(savedId: string) {
+  pendingNewScreen.value = null
+  currentScreenId.value = savedId
+}
 
-  const confirmed = confirm(`Are you sure you want to delete the screen "${getCurrentScreenName()}"?`)
-  if (!confirmed) return
-
-  store.deleteScreen(currentScreenId.value)
-
+function onScreenDeleted() {
   if (screenList.value.length > 0) {
     currentScreenId.value = screenList.value[0].id
   } else {
@@ -137,8 +133,7 @@ function deleteCurrentScreen() {
   padding: var(--space-3);
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background:
-    var(--color-surface)
+  background: var(--color-surface)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     no-repeat;
   background-position: right 1rem center;
