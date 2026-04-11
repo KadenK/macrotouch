@@ -1,5 +1,5 @@
 <template>
-  <Modal v-model="isOpen" title="Edit Screen" :fixed-size="true">
+  <Modal v-model="isOpen" :title="modalTitle" :fixed-size="true">
     <div class="edit-form">
       <div class="form-group">
         <label>Screen Name</label>
@@ -67,6 +67,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+const modalTitle = computed(() => (props.pendingScreen ? 'Create Screen' : 'Edit Screen'))
 const store = useMacroStore()
 const screen = computed(() => props.pendingScreen ?? store.getScreen(props.screenId))
 
