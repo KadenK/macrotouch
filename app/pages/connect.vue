@@ -2,9 +2,9 @@
   <div class="page connect-page">
     <div class="container">
       <header class="connect-header">
-        <h1 class="title">Connect your touch device</h1>
+        <h1 class="title">Connect</h1>
         <p class="subtitle">
-          Open the URL on your phone/tablet browser or scan the QR code to pair with this computer.
+          Open the URL on your touch device's browser or scan the QR code to pair with this computer.
         </p>
       </header>
 
