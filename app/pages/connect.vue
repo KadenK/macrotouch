@@ -2,7 +2,7 @@
   <div class="page connect-page">
     <div class="container">
       <header class="connect-header">
-        <h1>Connect your touch device</h1>
+        <h1 class="title">Connect your touch device</h1>
         <p class="subtitle">
           Open the URL on your phone/tablet browser or scan the QR code to pair with this computer.
         </p>
@@ -65,14 +65,24 @@ const { networkInterfaces, qrCodes, loading, error } = useNetwork()
 const selectedIndex = ref(0)
 </script>
 
-<style scoped>
+<style scoped lang="postcss">
 .connect-page {
   padding-bottom: var(--space-8);
+  max-width: 650px;
+  margin: 0 auto;
+  padding: var(--space-1);
 }
 
 .connect-header {
-  max-width: 40rem;
+  max-width: 50rem;
   margin-bottom: var(--space-6);
+
+  .title {
+    font-size: clamp(1.8rem, 2.8vw, 2.4rem);
+    font-weight: 700;
+    margin-bottom: var(--space-6);
+    color: var(--color-ink);
+  }
 }
 
 .subtitle {

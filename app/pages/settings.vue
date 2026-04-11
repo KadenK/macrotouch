@@ -38,7 +38,7 @@
       <div class="setting-row">
         <span>Swipe to change screens</span>
         <label class="switch">
-          <input type="checkbox" v-model="form.swipeToChangeScreens" />
+          <input v-model="form.swipeToChangeScreens" type="checkbox" />
           <span class="slider"></span>
         </label>
       </div>
@@ -54,7 +54,7 @@
       <div class="setting-row">
         <span>Attempt to Fullscreen</span>
         <label class="switch">
-          <input type="checkbox" v-model="form.attemptFullscreen" />
+          <input v-model="form.attemptFullscreen" type="checkbox" />
           <span class="slider"></span>
         </label>
       </div>
@@ -69,7 +69,7 @@
 
         <div class="setting-row">
           <span>Background color</span>
-          <input type="color" v-model="form.bgColorHex" />
+          <input v-model="form.bgColorHex" type="color" />
         </div>
 
         <div class="setting-row">
@@ -77,12 +77,12 @@
           <div class="grid-size-inputs">
             <div class="grid-size-field">
               <label class="sub-label">Rows</label>
-              <input type="number" min="1" max="20" step="1" class="grid-input" v-model.number="form.rows" />
+              <input v-model.number="form.rows" type="number" min="1" max="20" step="1" class="grid-input" />
             </div>
             <span class="grid-divider">×</span>
             <div class="grid-size-field">
               <label class="sub-label">Columns</label>
-              <input type="number" min="1" max="20" step="1" class="grid-input" v-model.number="form.columns" />
+              <input v-model.number="form.columns" type="number" min="1" max="20" step="1" class="grid-input" />
             </div>
           </div>
         </div>
@@ -150,7 +150,7 @@ function cancel() {
 .settings-page {
   max-width: 650px;
   margin: 0 auto;
-  padding: var(--space-6);
+  padding: var(--space-1);
 }
 
 .title {
@@ -161,7 +161,7 @@ function cancel() {
 }
 
 .section {
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-3);
   padding: var(--space-5);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -170,7 +170,7 @@ function cancel() {
 }
 
 .section h2 {
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
 }
 
 .subsection {

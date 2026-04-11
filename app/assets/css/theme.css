@@ -84,8 +84,6 @@ body {
   line-height: var(--leading-normal);
   color: var(--color-ink);
   background:
-    radial-gradient(800px 400px at 85% -10%, rgba(29, 78, 216, 0.15), rgba(29, 78, 216, 0) 60%),
-    radial-gradient(700px 380px at 10% -20%, rgba(249, 115, 22, 0.12), rgba(249, 115, 22, 0) 60%),
     var(--color-canvas);
 }
 
