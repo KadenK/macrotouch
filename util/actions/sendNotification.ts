@@ -1,8 +1,26 @@
 import { ActionType, type Action } from '../../types/index'
-import type { NotificationMessage } from '../../types'
+import type { NotificationMessage, NotificationPayload } from '../../types'
 
 type NotificationProcess = NodeJS.Process & {
   send?: (message: NotificationMessage) => boolean
+}
+
+const DEFAULT_NOTIFICATION_URL = 'http://127.0.0.1:4323/notify'
+const notificationServerUrl = process.env.NOTIFICATION_SERVER_URL ?? DEFAULT_NOTIFICATION_URL
+
+async function sendFallbackNotification(payload: NotificationPayload): Promise<void> {
+  const response = await fetch(notificationServerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Notification server responded ${response.status}: ${text}`)
+  }
 }
 
 const action: Action = {
@@ -26,9 +44,9 @@ const action: Action = {
     const message = typeof parameters?.message === 'string' ? parameters.message : ''
     const appName = 'MacroTouch'
 
-    try {
-      const childProcess = process as NotificationProcess
-      if (typeof childProcess.send === 'function') {
+    const childProcess = process as NotificationProcess
+    if (typeof childProcess.send === 'function') {
+      try {
         childProcess.send({
           type: 'notification',
           title,
@@ -36,10 +54,15 @@ const action: Action = {
           appName,
         })
         return
+      } catch (err) {
+        console.error('SendNotification.execute: failed to send notification via IPC', err)
       }
-      console.warn('SendNotification.execute: notification IPC is unavailable')
+    }
+
+    try {
+      await sendFallbackNotification({ title, message, appName })
     } catch (err) {
-      console.error('SendNotification.execute: failed to show notification', err)
+      console.warn('SendNotification.execute: notification IPC is unavailable, fallback failed', err)
     }
   },
 }

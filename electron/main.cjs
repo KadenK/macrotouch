@@ -65,6 +65,12 @@ function waitForServer(host, port, timeout = 15000) {
   })
 }
 
+const NOTIFICATION_SERVER_HOST = '127.0.0.1'
+const NOTIFICATION_SERVER_PORT = process.env.NOTIFICATION_SERVER_PORT
+  ? parseInt(process.env.NOTIFICATION_SERVER_PORT, 10)
+  : 4323
+let notificationHttpServer = null
+
 function stopNuxtServer() {
   if (!nuxtProcess || shutdownInProgress) {
     return
@@ -130,6 +136,70 @@ function stopNuxtServer() {
     nuxtProcess = null
     shutdownInProgress = false
   }, 1500)
+}
+
+function startNotificationServer() {
+  if (notificationHttpServer) {
+    return
+  }
+
+  notificationHttpServer = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/notify') {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Not found' }))
+      return
+    }
+
+    let body = ''
+    req.on('data', (chunk) => {
+      body += chunk.toString()
+    })
+
+    req.on('end', () => {
+      try {
+        const message = JSON.parse(body)
+        if (!message || typeof message !== 'object') {
+          throw new Error('Invalid notification payload')
+        }
+
+        const title = typeof message.title === 'string' && message.title.trim() ? message.title.trim() : 'MacroTouch'
+        const bodyText = typeof message.message === 'string' ? message.message : ''
+
+        try {
+          new Notification({ title, body: bodyText, silent: false }).show()
+          res.writeHead(204)
+          res.end()
+        } catch (err) {
+          console.error('Failed to show notification from dev server:', err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Failed to show notification' }))
+        }
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Invalid payload' }))
+      }
+    })
+  })
+
+  notificationHttpServer.on('error', (err) => {
+    console.error('Notification server failed:', err)
+  })
+
+  notificationHttpServer.listen(NOTIFICATION_SERVER_PORT, NOTIFICATION_SERVER_HOST, () => {
+    console.log(
+      `Notification server listening on http://${NOTIFICATION_SERVER_HOST}:${NOTIFICATION_SERVER_PORT}/notify`,
+    )
+  })
+}
+
+function stopNotificationServer() {
+  if (!notificationHttpServer) {
+    return
+  }
+
+  notificationHttpServer.close(() => {
+    notificationHttpServer = null
+  })
 }
 
 async function startNuxtServer() {
@@ -267,6 +337,8 @@ app.whenReady().then(async () => {
     app.dock.setIcon(appIcon)
   }
 
+  startNotificationServer()
+
   try {
     await startNuxtServer()
   } catch (err) {
@@ -326,12 +398,14 @@ app.on('window-all-closed', () => {
   // On macOS, keep the app running until Command+Q
   if (process.platform !== 'darwin') {
     stopNuxtServer()
+    stopNotificationServer()
     app.quit()
   }
 })
 
 app.on('before-quit', () => {
   stopNuxtServer()
+  stopNotificationServer()
 })
 
 process.on('SIGINT', () => {
