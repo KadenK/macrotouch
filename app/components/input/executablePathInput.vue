@@ -6,7 +6,7 @@
         type="text"
         :value="modelValue"
         class="input-field"
-        placeholder="Enter executable path"
+        placeholder="Enter app name or executable path"
         @input="onInput"
       />
       <button type="button" class="browse-button" @click="openExecutablePicker">Browse</button>
