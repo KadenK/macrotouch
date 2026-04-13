@@ -2,7 +2,7 @@ import { ActionType, type Action } from '../../types/index'
 import { getPlatform } from '../platform'
 import { executeCommand } from './commandExecutor'
 
-const options = ['PlayPause', 'NextTrack', 'PreviousTrack', 'Stop', 'VolumeUp', 'VolumeDown', 'Mute']
+const options = ['PlayPause', 'NextTrack', 'PreviousTrack', 'VolumeUp', 'VolumeDown', 'Mute']
 
 const action: Action = {
   actionId: 'multimediaControl',
@@ -32,22 +32,19 @@ const action: Action = {
     if (platform === 'darwin') {
       switch (toLower) {
         case 'playpause':
-          command = 'osascript -e \'tell application "Music" to playpause\''
+          command = 'osascript -e \'tell application "System Events" to key code 100\''
           break
         case 'nexttrack':
-          command = 'osascript -e \'tell application "Music" to next track\''
+          command = 'osascript -e \'tell application "System Events" to key code 101\''
           break
         case 'previoustrack':
-          command = 'osascript -e \'tell application "Music" to previous track\''
-          break
-        case 'stop':
-          command = 'osascript -e \'tell application "Music" to stop\''
+          command = 'osascript -e \'tell application "System Events" to key code 98\''
           break
         case 'volumeup':
-          command = "osascript -e 'set volume output volume min(100, (output volume of (get volume settings)) + 5)'"
+          command = "osascript -e 'set newVolume to output volume of (get volume settings) + 5' -e 'if newVolume > 100 then set newVolume to 100' -e 'set volume output volume newVolume'"
           break
         case 'volumedown':
-          command = "osascript -e 'set volume output volume max(0, (output volume of (get volume settings)) - 5)'"
+          command = "osascript -e 'set newVolume to output volume of (get volume settings) - 5' -e 'if newVolume < 0 then set newVolume to 0' -e 'set volume output volume newVolume'"
           break
         case 'mute':
           command = "osascript -e 'set volume output muted true'"
@@ -66,9 +63,6 @@ const action: Action = {
           break
         case 'previoustrack':
           command = '/usr/bin/playerctl previous'
-          break
-        case 'stop':
-          command = '/usr/bin/playerctl stop'
           break
         case 'volumeup':
           command = '/usr/bin/pactl set-sink-volume @DEFAULT_SINK@ +5%'
@@ -93,9 +87,6 @@ const action: Action = {
           break
         case 'previoustrack':
           command = 'powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]0xB1)"'
-          break
-        case 'stop':
-          command = 'powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]0xB2)"'
           break
         case 'volumeup':
           command = 'nircmd.exe changesysvolume 6553'
