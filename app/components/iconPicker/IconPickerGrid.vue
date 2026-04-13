@@ -8,7 +8,7 @@
         :title="iconName"
         @click="emit('select', iconName)"
       >
-        <Icon :name="`ic:${iconName}`" class="icon-svg" />
+        <Icon :name="iconName" class="icon-svg" />
         <span class="icon-name">{{ iconName }}</span>
       </button>
     </div>

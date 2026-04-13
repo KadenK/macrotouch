@@ -3,7 +3,7 @@
     <button v-if="mode === 'edit'" :type="'button'" class="macro edit" @click="openEditor">
       <div v-if="macro" class="macro-display" :style="{ backgroundColor: colorToHex(macro.backgroundColor) }">
         <Icon
-          :name="macro.icon.source === 'LIBRARY' ? `ic:${macro.icon.value}` : ''"
+          :name="macro.icon.source === 'LIBRARY' ? normalizeIconValue(macro.icon.value) : ''"
           class="macro-icon"
           :style="{ color: colorToHex(macro.iconColor) }"
         />
@@ -16,7 +16,7 @@
     <div v-else class="macro interact" @click="handleTrigger">
       <div v-if="macro" class="macro-display" :style="{ backgroundColor: colorToHex(macro.backgroundColor) }">
         <Icon
-          :name="macro.icon.source === 'LIBRARY' ? `ic:${macro.icon.value}` : ''"
+          :name="macro.icon.source === 'LIBRARY' ? normalizeIconValue(macro.icon.value) : ''"
           class="macro-icon"
           :style="{ color: colorToHex(macro.iconColor) }"
         />
@@ -46,6 +46,7 @@
 import { computed, ref } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import MacroEditModal from './MacroEditModal.vue'
+import { normalizeIconValue } from '~/composables/useIconData'
 import type { Macro, Position } from '~/../types'
 import { colorToHex } from '~/../types'
 

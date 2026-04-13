@@ -28,7 +28,7 @@
           <div class="icon-preview" :style="{ background: iconPreviewBg }" @click="openIconPicker">
             <Icon
               v-if="editForm.icon.source === 'LIBRARY'"
-              :name="`ic:${editForm.icon.value}`"
+              :name="normalizeIconValue(editForm.icon.value)"
               class="preview-icon"
               :style="{ color: colorToHex(editForm.iconColor) }"
             />
@@ -66,6 +66,7 @@ import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
+import { normalizeIconValue } from '~/composables/useIconData'
 import type { Macro, Position, Icon } from '~/../types'
 import { createColor, colorFromHex, colorToHex } from '~/../types'
 import { IconSource } from '~/../types/macro'
@@ -145,7 +146,7 @@ watch(isOpen, (open) => {
     const defaultBgColor = screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255)
     editForm.value = {
       name: 'New Macro',
-      icon: { source: 'LIBRARY', value: 'baseline-home' } as Icon,
+      icon: { source: 'LIBRARY', value: 'ic:baseline-home' } as Icon,
       iconColor: defaultIconColor,
       backgroundColor: defaultBgColor,
       iconColorHex: colorToHex(defaultIconColor),
