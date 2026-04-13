@@ -12,7 +12,8 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "electron:preview": "npm run build && cross-env NODE_ENV=production electron .",
-    "dist": "npm run build && cross-env NODE_ENV=production electron-builder"
+    "dist": "npm run build && cross-env NODE_ENV=production electron-builder",
+    "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64"
   },
   "dependencies": {
     "@iconify-json/ic": "^1.2.4",
