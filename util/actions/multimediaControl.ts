@@ -32,13 +32,13 @@ const action: Action = {
     if (platform === 'darwin') {
       switch (toLower) {
         case 'playpause':
-          command = 'osascript -e \'tell application "System Events" to key code 100\''
+          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to playpause' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to playpause' -e 'else' -e 'tell application \"System Events\" to key code 100' -e 'end if'"
           break
         case 'nexttrack':
-          command = 'osascript -e \'tell application "System Events" to key code 101\''
+          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to next track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to next track' -e 'else' -e 'tell application \"System Events\" to key code 101' -e 'end if'"
           break
         case 'previoustrack':
-          command = 'osascript -e \'tell application "System Events" to key code 98\''
+          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to previous track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to previous track' -e 'else' -e 'tell application \"System Events\" to key code 98' -e 'end if'"
           break
         case 'volumeup':
           command = "osascript -e 'set newVolume to output volume of (get volume settings) + 5' -e 'if newVolume > 100 then set newVolume to 100' -e 'set volume output volume newVolume'"
