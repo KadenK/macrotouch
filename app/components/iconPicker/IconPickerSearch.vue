@@ -1,6 +1,7 @@
 <template>
   <div class="icon-search">
     <input
+      ref="searchInput"
       v-model="searchQuery"
       type="text"
       placeholder="Search icons..."
@@ -12,7 +13,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
 defineProps<{
   resultCount?: number
@@ -23,6 +24,12 @@ const emit = defineEmits<{
 }>()
 
 const searchQuery = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
+
+onMounted(async () => {
+  await nextTick()
+  searchInput.value?.focus()
+})
 </script>
 
 <style scoped lang="postcss">
