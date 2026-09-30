@@ -1,0 +1,73 @@
+// C4 Level 2: Containers
+model {
+  extend macrotouch {
+    electron = container 'Desktop App' {
+      description 'Shows the editor window and optional tray icon; starts the master server if it is not running'
+      technology 'Electron'
+    }
+
+    master = container 'Master Server' {
+      description 'Holds all user data, keeps every client in sync, and sends actions to the right action server'
+      technology 'Node.js'
+    }
+
+    action = container 'Action Server' {
+      description 'Runs actions on this computer and reports their live state'
+      technology 'Node.js'
+    }
+
+    editor = webapp 'Desktop Editor' {
+      description 'Where the user builds screens and macros'
+      technology 'Vue SPA'
+    }
+
+    controller = webapp 'Mobile Controller' {
+      description 'Shows macro screens on a phone or tablet'
+      technology 'Vue SPA'
+    }
+
+    plugins = datastore 'Action Packages' {
+      description 'Built-in and user-installed action packages; each is a package.json and one bundled JS file'
+      technology 'app/actions, ~/.macroTouch/plugins'
+    }
+
+    desktopSettings = datastore 'Desktop Settings' {
+      description 'Start on login, tray icon, and quit when closed, for this computer'
+      technology 'JSON file'
+    }
+
+    state = datastore 'State File' {
+      description 'Saved screens, macros, and settings'
+      technology 'JSON file'
+    }
+
+    electron -> master 'starts if not running' {
+      technology 'detached process'
+    }
+    electron -[message]-> master 'quit' {
+      technology 'WebSocket'
+    }
+    electron -> editor 'shows' {
+      technology 'BrowserWindow'
+    }
+    electron -[call]-> desktopSettings 'reads/writes' {
+      technology 'fs'
+    }
+  }
+
+  user -> macrotouch.editor 'edits macros'
+  user -> macrotouch.controller 'taps macros'
+  os -> macrotouch.master 'starts at login (optional, no tray)' {
+    technology 'login item'
+  }
+  os -> macrotouch.electron 'starts at login (optional, tray icon)' {
+    technology 'login item'
+  }
+}
+
+views "2. Containers" {
+  view containers of macrotouch {
+    title 'Containers'
+    include *, user, os
+  }
+}

@@ -1,0 +1,21 @@
+// C4 Level 1: System Context
+model {
+  user = person 'User' {
+    description 'Sets up macros on the computer and runs them from a phone or tablet'
+  }
+
+  os = external 'Host OS' {
+    description 'The computer\'s operating system, which actions control'
+  }
+
+  macrotouch = system 'MacroTouch' {
+    description 'Turns phones and tablets on the local network into macro pads'
+  }
+}
+
+views "1. Context" {
+  view index {
+    title 'System Context'
+    include user, macrotouch, os
+  }
+}

@@ -1,0 +1,20 @@
+// Flow: edit a macro in the editor
+views "4. Flows" {
+  dynamic view flow-edit-state {
+    variant sequence
+    title 'Edit a Macro'
+
+    user -> macrotouch.editor.macroEditor 'edits macro'
+    macrotouch.editor.macroEditor -> macrotouch.editor.store 'update'
+    macrotouch.editor.store -> macrotouch.editor.ws 'upsert-macro'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'upsert-macro'
+    macrotouch.master.gateway -> macrotouch.master.store 'apply command'
+    macrotouch.master.store -> macrotouch.master.stateFile 'save'
+    macrotouch.master.stateFile -> macrotouch.state 'write'
+    macrotouch.master.store -> macrotouch.master.gateway 'state changed'
+    parallel {
+      macrotouch.master.gateway -> macrotouch.editor.ws 'state-patch'
+      macrotouch.master.gateway -> macrotouch.controller.ws 'state-patch'
+    }
+  }
+}

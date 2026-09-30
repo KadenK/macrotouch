@@ -1,0 +1,32 @@
+// Flow: app startup, action server registration, client connect
+views "4. Flows" {
+  dynamic view flow-startup {
+    variant sequence
+    title 'Startup & Connect'
+
+    alt {
+      when 'start on login, no tray' {
+        os -> macrotouch.master.gateway 'starts master'
+      }
+      when 'start on login, tray icon' {
+        os -> macrotouch.electron 'starts desktop app (tray only)'
+        macrotouch.electron -> macrotouch.master.gateway 'starts master if not running'
+      }
+      else 'user opens the editor' {
+        user -> macrotouch.electron 'opens'
+        macrotouch.electron -> macrotouch.master.gateway 'starts master if not running'
+      }
+    }
+
+    macrotouch.master.stateFile -> macrotouch.state 'load state.json'
+    macrotouch.master.launcher -> macrotouch.action.catalog 'starts action server'
+    macrotouch.action.catalog -> macrotouch.plugins 'import() packages'
+    macrotouch.action.masterLink -> macrotouch.master.gateway 'hello: node, nodeId, grouped catalog'
+    macrotouch.master.gateway -> macrotouch.master.nodes 'register node'
+
+    macrotouch.controller.ws -> macrotouch.master.gateway 'hello: controller'
+    macrotouch.controller.ws <- macrotouch.master.gateway 'snapshot: state + action state'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'hello: editor'
+    macrotouch.editor.ws <- macrotouch.master.gateway 'snapshot: state + catalogs'
+  }
+}

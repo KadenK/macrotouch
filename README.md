@@ -83,3 +83,9 @@ If packaging still fails, confirm that the local Nuxt and Electron runtime can s
 - `shared/` and `types/` - shared protocol and domain types.
 - `util/actions` - action implementations that can be triggered by macros.
 
+
+## License
+
+Copyright (C) 2026 The MacroTouch contributors
+
+MacroTouch is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.

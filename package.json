@@ -3,6 +3,16 @@
   "type": "module",
   "private": true,
   "version": "0.0.2",
+  "description": "Desktop-first macro pad for touch devices",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/KadenK/macrotouch",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KadenK/macrotouch.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KadenK/macrotouch/issues"
+  },
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "nuxt dev",
@@ -13,7 +23,8 @@
     "postinstall": "nuxt prepare",
     "electron:preview": "npm run build && cross-env NODE_ENV=production electron .",
     "dist": "npm run build && cross-env NODE_ENV=production electron-builder",
-    "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64"
+    "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64",
+    "docs": "likec4 start docs/architecture"
   },
   "dependencies": {
     "@iconify-json/codicon": "^1.2.51",
@@ -44,6 +55,7 @@
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "likec4": "^1.59.4",
     "postcss-nested": "^7.0.2",
     "wait-on": "^9.0.4"
   },

@@ -1,0 +1,68 @@
+specification {
+  // Level 1-2
+  element person {
+    notation 'Person'
+    style {
+      shape person
+    }
+  }
+  element system {
+    notation 'Software system'
+  }
+  element container {
+    notation 'Container: a running process'
+  }
+  element webapp {
+    notation 'Container: web app in a browser'
+    style {
+      shape browser
+    }
+  }
+  element datastore {
+    notation 'Data on disk'
+    style {
+      shape storage
+    }
+  }
+  element external {
+    notation 'External system'
+    style {
+      color gray
+    }
+  }
+
+  // Level 3: code inside a container (never a process, never a step)
+  element service {
+    notation 'Service: long-lived object with state and methods'
+    style {
+      color primary
+    }
+  }
+  element module {
+    notation 'Module: stateless functions or definitions'
+    style {
+      shape component
+      color slate
+    }
+  }
+  element ui {
+    notation 'UI: Vue page or component'
+    style {
+      shape browser
+      color indigo
+    }
+  }
+
+  relationship call {
+    notation 'In-process function call'
+  }
+  relationship event {
+    notation 'In-process event'
+    line dashed
+    color amber
+  }
+  relationship message {
+    notation 'Network message (HTTP / WebSocket / IPC)'
+    line dotted
+  }
+}

@@ -1,0 +1,30 @@
+// Flow: tap a macro on the controller
+views "4. Flows" {
+  dynamic view flow-trigger-macro {
+    variant sequence
+    title 'Run a Macro'
+
+    user -> macrotouch.controller.cell 'taps'
+    macrotouch.controller.cell -> macrotouch.controller.ws 'trigger macroId'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'macro-trigger'
+    macrotouch.master.gateway -> macrotouch.master.router 'route'
+    macrotouch.master.router -> macrotouch.master.store 'look up macro'
+    macrotouch.master.router -> macrotouch.master.nodes 'resolve nodeId (default: local)'
+    alt {
+      when 'node connected' {
+        macrotouch.master.gateway <- macrotouch.master.router 'run-action'
+        macrotouch.master.gateway -> macrotouch.action.masterLink 'run-action: actionId, params'
+        macrotouch.action.masterLink -> macrotouch.action.runner 'run'
+        macrotouch.action.runner -> macrotouch.action.catalog 'look up action'
+        macrotouch.action.runner -> macrotouch.action.actions 'execute(params)'
+        macrotouch.action.actions -> os 'perform'
+        macrotouch.action.masterLink <- macrotouch.action.runner 'result / error'
+        macrotouch.master.gateway <- macrotouch.action.masterLink 'action-result'
+        macrotouch.controller.ws <- macrotouch.master.gateway 'action-result'
+      }
+      else {
+        macrotouch.controller.ws <- macrotouch.master.gateway 'error: node offline'
+      }
+    }
+  }
+}

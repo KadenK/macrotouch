@@ -1,0 +1,97 @@
+// C4 Level 3: Clients (code inside each web app)
+model {
+  extend macrotouch.editor {
+    ws = service 'MasterConnection' {
+      description 'Connects to the master server and passes messages both ways'
+      technology 'composables/useWebSocket.ts'
+    }
+
+    store = service 'EditorStore' {
+      description 'Local copy of user data and the action list; sends edits to the master'
+      technology 'Pinia'
+    }
+
+    screens = ui 'ScreenEditor' {
+      description 'Page for laying out screens and macros'
+      technology 'pages/home.vue'
+    }
+
+    macroEditor = ui 'MacroEditor' {
+      description 'Form for choosing a macro\'s action, settings, and look'
+      technology 'components/macro/*'
+    }
+
+    settings = ui 'SettingsPage' {
+      description 'Page for app settings, including start on login, tray icon, and quit when closed'
+      technology 'pages/settings.vue'
+    }
+
+    connect = ui 'ConnectPage' {
+      description 'Shows a QR code for connecting a phone'
+      technology 'pages/connect.vue'
+    }
+
+    ws -[event]-> store 'message'
+    store -[call]-> ws 'send(command)'
+    screens -[call]-> store 'read, moveMacro()'
+    macroEditor -[call]-> store 'read, upsertMacro()'
+    settings -[call]-> store 'read, updateSettings()'
+  }
+
+  extend macrotouch.controller {
+    ws = service 'MasterConnection' {
+      description 'Connects to the master server and passes messages both ways'
+      technology 'composables/useWebSocket.ts'
+    }
+
+    store = service 'ControllerStore' {
+      description 'Local copy of screens, macros, and live action state; sends taps to the master'
+      technology 'Pinia'
+    }
+
+    grid = ui 'ScreenGrid' {
+      description 'Shows the current screen; swipe to change screens'
+      technology 'pages/screen.vue'
+    }
+
+    cell = ui 'MacroCell' {
+      description 'One macro on screen: a button, slider, or readout'
+      technology 'components/macro/MacroCell.vue'
+    }
+
+    ws -[event]-> store 'message'
+    store -[call]-> ws 'send(trigger, view-screen)'
+    grid -[call]-> store 'read screens, setScreen()'
+    grid -[call]-> cell 'renders'
+    cell -[call]-> store 'read state, trigger()'
+  }
+
+  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch' {
+    technology 'WebSocket'
+  }
+  macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, view-screen, macro-trigger, state-patch, action-state' {
+    technology 'WebSocket'
+  }
+  macrotouch.editor.settings -[message]-> macrotouch.electron 'desktop settings' {
+    technology 'IPC (preload)'
+  }
+  macrotouch.editor.connect -[message]-> macrotouch.master.http 'GET /api/ip' {
+    technology 'HTTP'
+  }
+}
+
+views "3. Components" {
+  view editor of macrotouch.editor {
+    title 'Desktop Editor'
+    description 'Boxes are code inside the editor web app. Arrows: solid = call, dashed = event, dotted = network.'
+    include *
+    include -> macrotouch.editor ->
+  }
+
+  view controller of macrotouch.controller {
+    title 'Mobile Controller'
+    description 'Boxes are code inside the controller web app. Arrows: solid = call, dashed = event, dotted = network.'
+    include *
+    include -> macrotouch.controller ->
+  }
+}

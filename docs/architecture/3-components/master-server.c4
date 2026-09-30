@@ -1,0 +1,80 @@
+// C4 Level 3: Master Server (code inside the master process)
+model {
+  extend macrotouch.master {
+    http = service 'WebServer' {
+      description 'Serves the web app pages and this computer\'s IP address'
+      technology 'master/http.ts'
+    }
+
+    gateway = service 'SocketServer' {
+      description 'Accepts connections from clients and action servers and passes messages along'
+      technology 'master/gateway.ts'
+    }
+
+    store = service 'StateStore' {
+      description 'Holds screens, macros, and settings in memory and applies changes'
+      technology 'master/state-store.ts'
+    }
+
+    stateFile = module 'StateFile' {
+      description 'Reads and writes the state file'
+      technology 'master/state-file.ts'
+    }
+
+    nodes = service 'NodeRegistry' {
+      description 'Tracks connected action servers, their actions, and the latest action state'
+      technology 'master/node-registry.ts'
+    }
+
+    watch = service 'WatchTracker' {
+      description 'Works out which live actions are on screen and tells each action server'
+      technology 'master/watch-tracker.ts'
+    }
+
+    launcher = service 'ActionServerLauncher' {
+      description 'Starts the local action server, restarts it if it stops, and stops it on quit'
+      technology 'master/action-server-launcher.ts'
+    }
+
+    router = service 'ActionRouter' {
+      description 'Finds which action server should run a macro and sends it there'
+      technology 'master/action-router.ts'
+    }
+
+    gateway -[call]-> store 'apply(command)'
+    store -[event]-> gateway 'change'
+    store -[call]-> stateFile 'load(), save()'
+    gateway -[call]-> nodes 'register(), setState()'
+    nodes -[event]-> gateway 'change'
+    gateway -[call]-> router 'trigger()'
+    gateway -[call]-> watch 'setViewedScreen(), removeClient()'
+    store -[event]-> watch 'change'
+    watch -[call]-> store 'getScreen(), getMacro()'
+    watch -[call]-> gateway 'send(nodeId, watch-actions)'
+    router -[call]-> store 'getMacro()'
+    router -[call]-> nodes 'get(nodeId)'
+    router -[call]-> gateway 'request(nodeId, run-action)'
+  }
+
+  macrotouch.editor -[message]-> macrotouch.master.http 'GET pages' {
+    technology 'HTTP'
+  }
+  macrotouch.controller -[message]-> macrotouch.master.http 'GET pages' {
+    technology 'HTTP'
+  }
+  macrotouch.master.launcher -> macrotouch.action 'starts, restarts, stops' {
+    technology 'child process'
+  }
+  macrotouch.master.stateFile -[call]-> macrotouch.state 'read/write' {
+    technology 'fs'
+  }
+}
+
+views "3. Components" {
+  view master of macrotouch.master {
+    title 'Master Server'
+    description 'Boxes are code inside the master process. Arrows: solid = call, dashed = event, dotted = network.'
+    include *
+    include -> macrotouch.master ->
+  }
+}

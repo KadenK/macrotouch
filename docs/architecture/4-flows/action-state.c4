@@ -1,0 +1,40 @@
+// Flow: stateful action (e.g. volume slider) reporting and control
+views "4. Flows" {
+  dynamic view flow-action-state {
+    variant sequence
+    title 'Live Action State (Volume)'
+
+    user -> macrotouch.controller.grid 'opens screen'
+    macrotouch.controller.grid -> macrotouch.controller.store 'setScreen()'
+    macrotouch.controller.store -> macrotouch.controller.ws 'view-screen'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'view-screen: screenId'
+    macrotouch.master.gateway -> macrotouch.master.watch 'setViewedScreen()'
+    opt 'watched set changed' {
+      macrotouch.master.watch -> macrotouch.master.gateway 'send(nodeId, watch-actions)'
+      macrotouch.master.gateway -> macrotouch.action.masterLink 'watch-actions: [actionId, params]'
+      macrotouch.action.masterLink -> macrotouch.action.monitor 'setWatched(list)'
+    }
+
+    loop 'every stateInterval, watched actions only' {
+      macrotouch.action.monitor -> macrotouch.action.catalog 'get(id)'
+      macrotouch.action.monitor -> macrotouch.action.actions 'getState(), getAppearance()'
+      macrotouch.action.actions -> os 'read volume'
+      opt 'changed or newly watched' {
+        macrotouch.action.monitor -> macrotouch.action.masterLink 'action state'
+        macrotouch.action.masterLink -> macrotouch.master.gateway 'action-state'
+        macrotouch.master.gateway -> macrotouch.master.nodes 'cache'
+        macrotouch.master.gateway -> macrotouch.controller.ws 'action-state'
+        macrotouch.controller.ws -> macrotouch.controller.store 'update'
+        macrotouch.controller.store -> macrotouch.controller.cell 'value + appearance'
+      }
+    }
+
+    user -> macrotouch.controller.cell 'drags slider'
+    macrotouch.controller.cell -> macrotouch.controller.ws 'trigger macroId, value (throttled)'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'macro-trigger'
+    macrotouch.master.gateway -> macrotouch.action.masterLink 'run-action (via router, see Run a Macro)'
+    macrotouch.action.masterLink -> macrotouch.action.runner 'run'
+    macrotouch.action.runner -> macrotouch.action.actions 'execute(value)'
+    macrotouch.action.actions -> os 'set volume'
+  }
+}

@@ -1,0 +1,54 @@
+// C4 Level 3: Action Server (code inside the action server process)
+model {
+  extend macrotouch.action {
+    masterLink = service 'MasterConnection' {
+      description 'Connects to the master server and passes messages both ways'
+      technology 'action/master-link.ts'
+    }
+
+    catalog = service 'ActionCatalog' {
+      description 'Loads all action packages and lists the actions this computer can run'
+      technology 'action/catalog.ts'
+    }
+
+    runner = service 'ActionRunner' {
+      description 'Runs an action using its version for this OS and returns the result'
+      technology 'action/runner.ts'
+    }
+
+    monitor = service 'StateMonitor' {
+      description 'Checks the live state of on-screen actions and reports changes'
+      technology 'action/state-monitor.ts'
+    }
+
+    actions = module 'Actions' {
+      description 'The loaded action code, from any package'
+      technology 'imported package code'
+    }
+
+    masterLink -[call]-> catalog 'toCatalog()'
+    masterLink -[call]-> runner 'run(id, params)'
+    runner -[call]-> catalog 'get(id)'
+    runner -[call]-> actions 'execute(params)'
+    masterLink -[call]-> monitor 'setWatched(list)'
+    monitor -[call]-> catalog 'get(id)'
+    monitor -[call]-> actions 'getState(), getAppearance()'
+    monitor -[event]-> masterLink 'change'
+  }
+
+  macrotouch.action.masterLink -[message]<-> macrotouch.master.gateway 'hello, run-action, action-result, watch-actions, action-state' {
+    technology 'WebSocket'
+  }
+  macrotouch.action.catalog -[call]-> macrotouch.plugins 'import()'
+  macrotouch.action.catalog -[call]-> macrotouch.action.actions 'registers'
+  macrotouch.action.actions -[call]-> os 'OS commands and APIs'
+}
+
+views "3. Components" {
+  view action of macrotouch.action {
+    title 'Action Server'
+    description 'Boxes are code inside the action server process. Arrows: solid = call, dashed = event, dotted = network.'
+    include *
+    include -> macrotouch.action ->
+  }
+}
