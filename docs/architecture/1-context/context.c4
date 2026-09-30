@@ -17,5 +17,13 @@ views "1. Context" {
   view index {
     title 'System Context'
     include user, macrotouch, os
+    // Lifecycle arrows (OS starts MacroTouch at login) belong on Layer 2, not here
+    exclude os -> macrotouch
+    include user -> macrotouch with {
+      title 'builds and taps macros'
+    }
+    include macrotouch -> os with {
+      title 'controls keyboard, media, and apps'
+    }
   }
 }
