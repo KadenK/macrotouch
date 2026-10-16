@@ -69,5 +69,22 @@ views "2. Containers" {
   view containers of macrotouch {
     title 'Containers'
     include *, user, os
+    // Summary titles for edges that roll up from Level 3 as [...]
+    include macrotouch.editor -> macrotouch.master with {
+      title 'loads pages, syncs edits'
+      technology 'HTTP, WebSocket'
+    }
+    include macrotouch.controller -> macrotouch.master with {
+      title 'loads pages, sends taps, gets live state'
+      technology 'HTTP, WebSocket'
+    }
+    include macrotouch.action -> macrotouch.master with {
+      title 'runs actions, reports live state'
+      technology 'WebSocket'
+    }
+    include macrotouch.electron -> macrotouch.master with {
+      title 'starts if not running, sends quit'
+      technology 'detached process, WebSocket'
+    }
   }
 }
