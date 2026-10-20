@@ -1,0 +1,21 @@
+// Typecheck for the shared protocol and domain types.
+//
+// Deliberately separate from the Nuxt project references: the master server and
+// the Action Server compile these files outside Nuxt, so they have to stand on
+// their own with no app or Nitro context.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["shared/**/*.ts", "types/**/*.ts", "util/platform.ts"]
+}
