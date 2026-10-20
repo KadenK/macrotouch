@@ -30,15 +30,6 @@ const action: Action = {
     try {
       // Handle URLs
       if (isUrl(target)) {
-        try {
-          const electron = await import('electron')
-          if (electron?.shell?.openExternal) {
-            await electron.shell.openExternal(target)
-            return
-          }
-        } catch {
-          // electron not available in this context, fall through to platform command
-        }
         if (process.platform === 'win32') {
           await executeSpawn(`start "" "${target}" ${args}`.trim())
         } else if (process.platform === 'darwin') {

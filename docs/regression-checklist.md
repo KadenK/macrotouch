@@ -27,7 +27,6 @@ of the server into Master Server / Action Server / Electron App.
 | --- | --- | --- |
 | Nuxt app | port `4321` | Electron waits on `127.0.0.1:4321`; dev server binds `0.0.0.0` |
 | WebSocket server | port `4322` | overridable via `WS_PORT` / `NUXT_WS_PORT` |
-| Notification fallback HTTP | `127.0.0.1:4323` | overridable via `NOTIFICATION_SERVER_PORT` / `NOTIFICATION_SERVER_URL` |
 | State file | `~/.macroTouch/state.json` | overridable via `MACROTOUCH_DATA_DIR`, else `XDG_DATA_HOME` |
 | Launch modes | `npm run dev` (browser only), `npm run dev:electron`, `npm run electron:preview`, packaged `npm run dist` | Several items behave differently with and without the Electron shell — each says which |
 
@@ -269,9 +268,9 @@ separately and mark untested platforms as **not verified** rather than leaving t
 | ID | Action | macOS | Windows | Linux |
 | --- | --- | --- | --- | --- |
 | AC-01 | Shell Command | `$SHELL` via `exec` | `%COMSPEC%` via `exec` | `$SHELL` via `exec` |
-| AC-02 | Launch App — URL | Electron `openExternal`, else `open` | `start ""` | `xdg-open` |
+| AC-02 | Launch App — URL | `open` | `start ""` | `xdg-open` |
 | AC-03 | Launch App — application | `open -a "<path>.app"` | `start "" "<path>"` | spawn binary directly |
-| AC-04 | Send Notification | IPC to Electron, else POST `:4323` | same | same |
+| AC-04 | Send Notification | `terminal-notifier` | SnoreToast | `notify-send` |
 | AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys` | `xdotool`, falling back to `ydotool` |
 | AC-06 | Type Text | `osascript` keystroke | PowerShell `SendKeys` | `xdotool type`, falling back to `ydotool type` |
 | AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell `SendKeys` / `nircmd` | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
@@ -281,19 +280,17 @@ produces that effect. An empty or missing command logs a warning and does nothin
 ⚠ The command string is passed to the shell unquoted and unescaped — shell metacharacters in the
 field are interpreted. That is current behavior and the field is trusted input.
 
-**AC-02 — Launch App, URL branch.** An `http(s)://` target opens in the default browser. Under
-Electron this goes through the shell integration; without Electron it falls back to the platform
-opener. A custom scheme (e.g. `mailto:`) is also treated as a URL — anything matching
+**AC-02 — Launch App, URL branch.** An `http(s)://` target opens in the default browser via the
+platform opener, with or without the Electron shell. A custom scheme (e.g. `mailto:`) is also treated as a URL — anything matching
 `scheme:` counts.
 
 **AC-03 — Launch App, application branch.** On macOS a `.app` bundle path launches that app; a
 non-`.app` path is run as a raw binary. On Windows a path launches via `start`. Arguments in the
 `Arguments` field are appended. An empty `App` field logs a warning and does nothing.
 
-**AC-04 — Send Notification.** Under Electron, an OS notification appears with the given title and
-message, defaulting the title to `MacroTouch` when blank. Without the Electron shell, the action
-posts to the notification server instead. ⚠ When neither is available (e.g. plain `npm run dev`),
-the failure is logged as a warning and the user sees nothing at all.
+**AC-04 — Send Notification.** An OS notification appears with the given title and message,
+defaulting the title to `MacroTouch` when blank, with or without the Electron shell (including
+plain `npm run dev`). If the OS refuses it, the failure is logged as an error.
 
 **AC-05 — Key Combo.** Capture a combo (e.g. `cmd+c` / `ctrl+c`), trigger it, and confirm the
 receiving app saw the keystroke. Modifier aliases (`ctrl`/`control`, `cmd`/`command`/`meta`/`win`,
@@ -368,13 +365,14 @@ build) both open a window on the editor, after the Nuxt server is up.
 rather than opening a new one.
 
 **EL-03 — Server shutdown on quit.** Quitting the app leaves no orphaned Nuxt or websocket process,
-and ports `4321`/`4322`/`4323` are free afterwards.
+and ports `4321`/`4322` are free afterwards.
 
 **EL-04 — External links.** A Launch App URL action opens in the system browser, not inside the
 Electron window.
 
-**EL-05 — Notification server.** While the shell is running, the notification endpoint on `4323` is
-listening and AC-04 produces a real OS notification.
+~~**EL-05 — Notification server.** While the shell is running, the notification endpoint on `4323` is
+listening and AC-04 produces a real OS notification.~~ Removed by MAC-11: notifications no longer
+go through Electron; AC-04 covers them.
 
 **EL-06 — Packaged build.** `npm run dist` produces an artifact in `dist-electron/` that launches
 and passes ST-03, PA-06 and one action end to end.
@@ -401,7 +399,6 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | RT-02 | Triggers are fire-and-forget; the phone never learns an action failed |
 | RT-12 | Runtime with zero screens renders blank with no message |
 | AC-01 | Shell Command is passed to the shell unescaped |
-| AC-04 | With no Electron shell and no notification server, notifications fail silently |
 | AC-05/06 | macOS needs Accessibility permission; without it, input actions fail silently |
 | AC-07 | macOS `Mute` does not toggle; behavior depends on Music/Spotify being open |
 | SE-03 | `Cancel` does not leave the Settings page |
