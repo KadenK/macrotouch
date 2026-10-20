@@ -24,7 +24,8 @@
     "electron:preview": "npm run build && cross-env NODE_ENV=production electron .",
     "dist": "npm run build && cross-env NODE_ENV=production electron-builder",
     "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64",
-    "docs": "likec4 start docs/architecture"
+    "docs": "likec4 start docs/architecture",
+    "typecheck:protocol": "tsc -p tsconfig.protocol.json"
   },
   "dependencies": {
     "@iconify-json/codicon": "^1.2.51",
