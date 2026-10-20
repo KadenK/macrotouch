@@ -1,13 +1,25 @@
 import { useRuntimeConfig } from '#app'
 import { WEBSOCKET_PORT } from '../../shared/websocket'
-import type { WebSocketMessage, WebSocketState } from '../../types'
+import { PROTOCOL_VERSION } from '../../shared/protocol'
+import type {
+  ClientToMasterMessage,
+  MasterToClientMessage,
+  ProtocolError,
+  Snapshot,
+  StatePatch,
+} from '../../shared/protocol'
 
 type WebSocketHandlers = {
-  state?: (state: WebSocketState) => void
+  snapshot?: (snapshot: Snapshot) => void
+  patch?: (patch: StatePatch) => void
+  error?: (error: ProtocolError) => void
   open?: () => void
   close?: () => void
-  error?: (error: Event) => void
+  socketError?: (error: Event) => void
 }
+
+/** `/screen` is the touch runtime; everything else is the editor. */
+const roleForPath = (pathname: string) => (pathname.startsWith('/screen') ? 'controller' : 'editor')
 
 const createWebSocket = () => {
   const ws = ref<WebSocket | null>(null)
@@ -24,12 +36,18 @@ const createWebSocket = () => {
 
     ws.value.onopen = () => {
       isConnected.value = true
+      // hello first, always. The master answers with a snapshot.
+      send({
+        type: 'hello',
+        protocolVersion: PROTOCOL_VERSION,
+        role: roleForPath(window.location.pathname),
+      })
       handlers.open?.()
       console.log('WebSocket connected')
     }
 
     ws.value.onmessage = (event: MessageEvent) => {
-      let data: WebSocketMessage | undefined
+      let data: MasterToClientMessage | undefined
       try {
         data = JSON.parse(event.data)
       } catch {
@@ -39,12 +57,22 @@ const createWebSocket = () => {
 
       if (!data || typeof data !== 'object' || !('type' in data)) return
 
-      if (data.type === 'state') {
-        handlers.state?.(data.state)
+      switch (data.type) {
+        case 'snapshot':
+          handlers.snapshot?.(data)
+          break
+        case 'state-patch':
+          handlers.patch?.(data)
+          break
+        case 'error':
+          handlers.error?.(data.error)
+          break
+        // action-result and action-state have no producer until MAC-41 / Demo 2.
       }
-      // macro-trigger is intentionally not handled on clients; server executes actions.
     }
 
+    // No reconnect: the page must be reloaded after a server restart. Adding a
+    // retry here would be a behavior change unrelated to this ticket.
     ws.value.onclose = () => {
       isConnected.value = false
       handlers.close?.()
@@ -52,7 +80,7 @@ const createWebSocket = () => {
     }
 
     ws.value.onerror = (error: Event) => {
-      handlers.error?.(error)
+      handlers.socketError?.(error)
       console.error('WebSocket error:', error)
     }
   }
@@ -63,8 +91,8 @@ const createWebSocket = () => {
     }
   }
 
-  const send = (data: WebSocketMessage) => {
-    if (ws.value && isConnected.value) {
+  const send = (data: ClientToMasterMessage) => {
+    if (ws.value && ws.value.readyState === 1) {
       ws.value.send(JSON.stringify(data))
     }
   }
