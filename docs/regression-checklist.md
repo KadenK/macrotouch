@@ -19,7 +19,10 @@ of the server into Master Server / Action Server / Electron App.
   changed*. File a separate ticket if it should change.
 - Results go in `docs/baseline-runs/`, not in this file, so that re-runs don't churn the contract.
   The reference baseline is
-  [`2026-10-16-master-d85c18d.md`](baseline-runs/2026-10-16-master-d85c18d.md).
+  [`2026-10-19-master-93e0004.md`](baseline-runs/2026-10-19-master-93e0004.md).
+- The items that round-trip through the websocket are also covered automatically by
+  `npm run test:protocol`. See [`testing-mac-40.md`](testing-mac-40.md) for how to run it and for
+  the manual pass it does not replace.
 
 ## Environment under test
 

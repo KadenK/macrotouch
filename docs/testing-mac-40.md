@@ -10,7 +10,23 @@ Budget roughly 2 minutes for the harness and 15 for the manual pass.
 
 ---
 
-## 0. Isolate the data directory
+## 0. From a cold start
+
+```bash
+git checkout khm45/mac-40-migrate-to-hellosnapshot-and-commandstate-patch-protocol
+npm install
+```
+
+Ports `4321` and `4322` must be free. There is no Node version pinned in the repo; the
+verification run below used Node 22.
+
+Everything here is plain Node and `ws`, so it runs anywhere the app does. The `export` lines are
+bash/zsh — on PowerShell use `$env:MACROTOUCH_DATA_DIR = "$env:TEMP\mt-test"`, and on `cmd` use
+`set`.
+
+---
+
+## 1. Isolate the data directory
 
 Every step below writes to the state file. `resolveDataRoot()` checks `MACROTOUCH_DATA_DIR`
 before `XDG_DATA_HOME` and `~/.macroTouch`, so exporting it keeps the run away from your real
@@ -31,7 +47,7 @@ exported in whichever shell you run it from.
 
 ---
 
-## 1. Typecheck — seconds
+## 2. Typecheck — seconds
 
 ```bash
 npm run typecheck:protocol
@@ -46,7 +62,7 @@ Don't read them as a regression.
 
 ---
 
-## 2. Protocol harness — 24 checks, ~2 seconds
+## 3. Protocol harness — 24 checks, ~2 seconds
 
 ```bash
 npm run test:protocol
@@ -96,7 +112,7 @@ Then revert. This was run during the verification below and behaved exactly that
 
 ---
 
-## 3. Manual UI pass — what the harness cannot see
+## 4. Manual UI pass — what the harness cannot see
 
 The harness proves the master is correct. It says nothing about whether the client applies patches
 and renders them. Open two editor windows on `http://localhost:4321/home`.
@@ -144,12 +160,12 @@ underneath this branch — `regression-checklist.md` is already updated for that
   `Unknown message type: teleport-macro`, `No screen no-such-screen`, `Position 9,9 is outside
   screen ...`.
 
-**Not yet run on this branch:** the manual UI pass in section 3, and anything under Electron. The
-harness does not exercise the client at all, so section 3 is still required before merge.
+**Not yet run on this branch:** the manual UI pass in section 4, and anything under Electron. The
+harness does not exercise the client at all, so section 4 is still required before merge.
 
 ### A note on the earlier baseline runs
 
 `baseline-runs/2026-10-19-master-93e0004.md` and `2026-10-19-mac-40.md` were produced with a
 Playwright harness that was **never committed** — there are no test files in the repo and no
 Playwright dependency. Those documents can be read, but not reproduced. `scripts/protocol-check.mjs`
-is the re-runnable replacement for their protocol half; their UI half is section 3 above, by hand.
+is the re-runnable replacement for their protocol half; their UI half is section 4 above, by hand.

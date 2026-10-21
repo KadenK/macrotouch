@@ -51,6 +51,24 @@ The browser app runs on Nuxt's default dev port, while the touch-device websocke
 - `npm run preview` - preview the production Nuxt build locally.
 - `npm run electron:preview` - build the app and open it in Electron.
 - `npm run dist` - build and package the desktop application.
+- `npm run typecheck:protocol` - typecheck `shared/` and `types/` with no Nuxt context.
+- `npm run test:protocol` - run the websocket protocol harness against a running dev server.
+
+## Testing
+
+There is no unit test suite. Behavior is verified against
+[`docs/regression-checklist.md`](docs/regression-checklist.md), which is the behavior contract, with
+results recorded in [`docs/baseline-runs/`](docs/baseline-runs/).
+
+The websocket protocol has an automated harness — start a dev server, then:
+
+```bash
+export MACROTOUCH_DATA_DIR=/tmp/mt-test   # keeps the run away from your real state
+npm run test:protocol
+```
+
+[`docs/testing-mac-40.md`](docs/testing-mac-40.md) is the full procedure, covering both the harness
+and the manual pass it cannot replace.
 
 ## Desktop Packaging
 
