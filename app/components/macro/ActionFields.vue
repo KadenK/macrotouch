@@ -16,8 +16,8 @@
 <script lang="ts" setup>
 import { reactive, watch } from 'vue'
 import type { Component, PropType } from 'vue'
-import type { ActionField } from '~/../types/action'
-import { ActionType } from '~/../types/action'
+import type { ActionField } from '~/../shared/types/action'
+import { ActionType } from '~/../shared/types/action'
 import StringInput from '~/components/input/stringInput.vue'
 import FilepathInput from '~/components/input/filepathInput.vue'
 import ExecutablePathInput from '~/components/input/executablePathInput.vue'

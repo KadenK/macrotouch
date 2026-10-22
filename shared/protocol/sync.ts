@@ -1,6 +1,6 @@
-import type { Macro } from '../../types/macro'
-import type { MacroScreen } from '../../types/screen'
-import type { MacroSettings } from '../../types/state'
+import type { Macro } from '../types/macro'
+import type { MacroScreen } from '../types/screen'
+import type { MacroSettings } from '../types/state'
 
 /**
  * Master to every client, after a command changes the state.

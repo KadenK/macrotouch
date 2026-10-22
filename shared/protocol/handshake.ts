@@ -1,7 +1,7 @@
-import type { ActionCatalog, NodeId } from '../../types/node'
-import type { ActionStateEntry, ActionStateKey } from '../../types/actionState'
-import type { MacroState } from '../../types/state'
-import type { OSPlatform } from '../../util/platform'
+import type { ActionCatalog, NodeId } from '../types/node'
+import type { ActionStateEntry, ActionStateKey } from '../types/actionState'
+import type { MacroState } from '../types/state'
+import type { OSPlatform } from '../platform'
 
 /**
  * First message on every connection, in both directions, before anything else.

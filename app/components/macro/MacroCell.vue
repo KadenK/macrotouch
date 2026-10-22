@@ -47,8 +47,8 @@ import { computed, ref } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import MacroEditModal from './MacroEditModal.vue'
 import { normalizeIconValue } from '~/composables/useIconData'
-import type { Macro, Position } from '~/../types'
-import { colorToHex } from '~/../types'
+import type { Macro, Position } from '~/../shared/types'
+import { colorToHex } from '~/../shared/types'
 
 const {
   mode,

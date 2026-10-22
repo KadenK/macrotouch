@@ -67,9 +67,9 @@ import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
 import { normalizeIconValue } from '~/composables/useIconData'
-import type { Macro, Position, Icon } from '~/../types'
-import { createColor, colorFromHex, colorToHex } from '~/../types'
-import { IconSource } from '~/../types/macro'
+import type { Macro, Position, Icon } from '~/../shared/types'
+import { createColor, colorFromHex, colorToHex } from '~/../shared/types'
+import { IconSource } from '~/../shared/types/macro'
 
 const props = defineProps<{
   modelValue: boolean

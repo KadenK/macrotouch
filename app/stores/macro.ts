@@ -10,10 +10,10 @@ import type {
   Position,
   ScreenListItem,
   ScreenRow,
-} from '~/../types'
+} from '~/../shared/types'
 import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
-import { createMacroScreen, createColor, createDefaultSettings } from '~/../types'
-import { actions as actionList } from '~/../util/actions'
+import { createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
+import { actions as actionList } from '~/../action-server/actions'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 

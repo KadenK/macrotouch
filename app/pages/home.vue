@@ -36,7 +36,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
-import { createMacroScreen, createColor } from '~/../types'
+import { createMacroScreen, createColor } from '~/../shared/types'
 import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
 
 const store = useMacroStore()

@@ -1,4 +1,4 @@
-import type { ActionStateEntry, ActionStateValue, WatchedAction } from '../../types/actionState'
+import type { ActionStateEntry, ActionStateValue, WatchedAction } from '../types/actionState'
 import type { ProtocolError } from './errors'
 
 /** Correlates a request with the result that answers it. */

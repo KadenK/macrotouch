@@ -101,7 +101,7 @@
 import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
-import { colorFromHex, colorToHex } from '~/../types'
+import { colorFromHex, colorToHex } from '~/../shared/types'
 import { useRouter } from 'vue-router'
 
 const store = useMacroStore()

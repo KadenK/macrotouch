@@ -51,8 +51,8 @@
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
-import type { MacroScreen } from '~/../types'
-import { colorFromHex, colorToHex } from '~/../types'
+import type { MacroScreen } from '~/../shared/types'
+import { colorFromHex, colorToHex } from '~/../shared/types'
 
 const props = defineProps<{
   modelValue: boolean
