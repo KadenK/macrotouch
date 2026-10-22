@@ -19,7 +19,10 @@ of the server into Master Server / Action Server / Electron App.
   changed*. File a separate ticket if it should change.
 - Results go in `docs/baseline-runs/`, not in this file, so that re-runs don't churn the contract.
   The reference baseline is
-  [`2026-10-16-master-d85c18d.md`](baseline-runs/2026-10-16-master-d85c18d.md).
+  [`2026-10-19-master-93e0004.md`](baseline-runs/2026-10-19-master-93e0004.md).
+- The items that round-trip through the websocket are also covered automatically by
+  `npm run test:protocol`. See [`testing-mac-40.md`](testing-mac-40.md) for how to run it and for
+  the manual pass it does not replace.
 
 ## Environment under test
 
@@ -43,7 +46,8 @@ with the default grid from Settings. No error dialog.
 
 **ST-02 — State file is created on first change.** From ST-01, make any edit. `state.json` appears
 in the data directory, pretty-printed with 2-space indent, containing `macros`, `screens` and
-`settings`.
+`settings`. Since MAC-40 the master seeds `settings` from `createDefaultSettings()`; before that
+they arrived implicitly because every client edit re-sent the whole state.
 
 **ST-03 — State survives an app restart.** Create a screen and at least one macro, quit the app
 fully, start it again. Screens, macro placement, macro names/icons/colors, action parameters and
@@ -88,12 +92,18 @@ receive the new settings.
 client does **not** reconnect automatically — there is no retry. The page must be reloaded. Any
 triggers attempted in the meantime are silently dropped.
 
-**SY-06 — Concurrent edits.** Edit from two clients at once. ⚠ Last write wins at the top level —
-the whole `macros`/`screens`/`settings` map from the last client to broadcast replaces the
-previous. No merge, no conflict warning.
+**SY-06 — Concurrent edits.** Edit from two clients at once. Each client sends a command naming
+only what it changed, so edits to different macros, screens or settings all survive. Two clients
+editing *the same* entity still resolve last-write-wins on that entity alone.
+~~⚠ Last write wins at the top level — the whole `macros`/`screens`/`settings` map from the last
+client to broadcast replaces the previous. No merge, no conflict warning.~~ Changed by
+[MAC-40](https://linear.app/macrotouch/issue/MAC-40/migrate-to-hellosnapshot-and-commandstate-patch-protocol);
+see [`baseline-runs/2026-10-19-mac-40.md`](baseline-runs/2026-10-19-mac-40.md).
 
-**SY-07 — Malformed message is ignored.** Send a non-JSON or type-less websocket message. The
-server logs a warning and stays up; other clients are unaffected.
+**SY-07 — Malformed message is rejected.** Send a non-JSON or type-less websocket message. The
+server logs a warning and stays up; other clients are unaffected. Since MAC-40 the offending
+client also receives `{ type: 'error', error: { code: 'invalid-message' } }` naming the problem;
+before MAC-40 it received nothing.
 
 **SY-08 — A client never executes actions.** Confirm that a `macro-trigger` broadcast does not
 cause the desktop editor's browser context to attempt the action. Only the host process executes.
@@ -119,9 +129,11 @@ range 1–20 on save.
 Existing macros stay in their original row/column; new cells are empty.
 
 **SC-06 — Shrinking a grid.** Place a macro in the last column, then reduce the column count below
-it. ⚠ The macro's placement is dropped from the row when state is next round-tripped through the
-server, and the macro record itself is left behind in `macros` with no screen referencing it. It is
-not recoverable by growing the grid back.
+it. ⚠ The macro's placement is dropped from the row and the macro record itself is left behind in
+`macros` with no screen referencing it. It is not recoverable by growing the grid back.
+Since MAC-40 the drop is persisted immediately, because normalization moved into the master; before
+MAC-40 the clamp ran only on the client and `state.json` kept the stale placement until some later
+edit pushed the normalized state back.
 
 **SC-07 — Delete a screen.** Deleting prompts with a native `confirm()` naming the screen. Cancel
 leaves everything untouched.

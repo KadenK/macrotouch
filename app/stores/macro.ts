@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
   Action,
-  BroadcastData,
   Color,
   Macro,
   MacroScreen,
@@ -12,15 +11,11 @@ import type {
   ScreenListItem,
   ScreenRow,
 } from '~/../types'
-import { createMacroScreen, createColor } from '~/../types'
+import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
+import { createMacroScreen, createColor, createDefaultSettings } from '~/../types'
 import { actions as actionList } from '~/../util/actions'
 
-const DEFAULT_SETTINGS: MacroSettings = {
-  defaultScreenBgColor: createColor(240, 240, 240),
-  defaultScreenSize: { rows: 3, columns: 5 },
-  swipeToChangeScreens: true,
-  attemptFullscreen: true,
-}
+const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 
 export const useMacroStore = defineStore('Macro', () => {
   const macros = ref<Record<string, Macro>>({})
@@ -35,13 +30,19 @@ export const useMacroStore = defineStore('Macro', () => {
 
   const actions = ref<Action[]>(actionList)
 
-  const broadcastFn = ref<((data: BroadcastData) => void) | null>(null)
+  const sendFn = ref<((message: ClientToMasterMessage) => void) | null>(null)
 
-  function setBroadcastFn(fn: (data: BroadcastData) => void) {
-    broadcastFn.value = fn
+  function setSendFn(fn: (message: ClientToMasterMessage) => void) {
+    sendFn.value = fn
   }
 
-  function setState(state: MacroState) {
+  /** Send a command to the master. Never called while applying a remote change. */
+  function send(message: ClientToMasterMessage) {
+    if (isApplyingRemoteState.value || !isReady.value) return
+    sendFn.value?.(message)
+  }
+
+  function applySnapshot(state: MacroState) {
     isApplyingRemoteState.value = true
 
     macros.value = state.macros || {}
@@ -87,17 +88,50 @@ export const useMacroStore = defineStore('Macro', () => {
     }
 
     isApplyingRemoteState.value = false
+    // Ready on snapshot, not on socket open: a command sent before the
+    // handshake completes would be clobbered by the snapshot that follows.
     isReady.value = true
   }
 
-  function maybeBroadcast() {
-    if (isApplyingRemoteState.value || !isReady.value) return
-    broadcastFn.value?.({ macros: macros.value, screens: screens.value, settings: settings.value })
+  /**
+   * Apply a master-authored delta. Mutates only - never sends, or a patch
+   * would echo straight back as a new command.
+   */
+  function applyPatch(patch: StatePatch) {
+    isApplyingRemoteState.value = true
+
+    if (patch.macros) {
+      for (const [id, macro] of Object.entries(patch.macros)) {
+        if (macro === null) {
+          const { [id]: _removed, ...rest } = macros.value
+          macros.value = rest
+        } else {
+          macros.value[id] = macro
+        }
+      }
+    }
+
+    if (patch.screens) {
+      for (const [id, screen] of Object.entries(patch.screens)) {
+        if (screen === null) {
+          const { [id]: _removed, ...rest } = screens.value
+          screens.value = rest
+        } else {
+          screens.value[id] = screen
+        }
+      }
+    }
+
+    if (patch.settings) {
+      settings.value = { ...settings.value, ...patch.settings }
+    }
+
+    isApplyingRemoteState.value = false
   }
 
   function updateSettings(updated: Partial<MacroSettings>) {
     settings.value = { ...settings.value, ...updated }
-    maybeBroadcast()
+    send({ type: 'update-settings', settings: updated })
   }
 
   function getMacro(id: string): Macro | undefined {
@@ -107,14 +141,14 @@ export const useMacroStore = defineStore('Macro', () => {
   function updateMacro(updatedMacro: Macro, id?: string) {
     const macroId = id || updatedMacro.id
     macros.value[macroId] = updatedMacro
-    maybeBroadcast()
+    send({ type: 'upsert-macro', macro: macros.value[macroId]! })
   }
 
   function triggerMacro(macroId: string) {
     if (!macros.value[macroId]) {
       console.warn(`Macro with id ${macroId} does not exist`)
     }
-    broadcastFn.value?.({ type: 'macro-trigger', id: macroId })
+    sendFn.value?.({ type: 'macro-trigger', requestId: crypto.randomUUID(), macroId })
   }
 
   function _addMacro(macro: Macro) {
@@ -146,7 +180,13 @@ export const useMacroStore = defineStore('Macro', () => {
     }
 
     screens.value[screen.id] = screen
-    maybeBroadcast()
+    // Macros created alongside the screen are upserted first so the master
+    // never holds a screen referencing a macro it hasn't seen.
+    for (const macroId of new Set(screen.macroRows.flatMap((row) => row.macrosIds).filter(Boolean))) {
+      const macro = macros.value[macroId]
+      if (macro) send({ type: 'upsert-macro', macro })
+    }
+    send({ type: 'upsert-screen', screen })
   }
 
   function getScreen(id: string): MacroScreen | undefined {
@@ -173,13 +213,13 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     const { [id]: _removedScreen, ...remainingScreens } = screens.value
     screens.value = remainingScreens
-    maybeBroadcast()
+    send({ type: 'delete-screen', screenId: id })
   }
 
   function updateScreen(updatedScreen: MacroScreen, id?: string) {
     const screenId = id || updatedScreen.id
     screens.value[screenId] = updatedScreen
-    maybeBroadcast()
+    send({ type: 'upsert-screen', screen: screens.value[screenId]! })
   }
 
   function addMacro(screenOrScreenId: string | MacroScreen, macro: Macro, position: Position) {
@@ -195,7 +235,7 @@ export const useMacroStore = defineStore('Macro', () => {
     }
     _addMacro(macro)
     screen.macroRows[position.row]!.macrosIds[position.column] = macro.id
-    maybeBroadcast()
+    send({ type: 'upsert-macro', macro, placement: { screenId, position } })
   }
 
   function deleteMacro(screenOrScreenId: string | MacroScreen, position: Position) {
@@ -213,7 +253,7 @@ export const useMacroStore = defineStore('Macro', () => {
     if (macroId) {
       _deleteMacro(macroId)
       screen.macroRows[position.row]!.macrosIds[position.column] = ''
-      maybeBroadcast()
+      send({ type: 'delete-macro', screenId, position })
     }
   }
 
@@ -237,7 +277,7 @@ export const useMacroStore = defineStore('Macro', () => {
     if (macroId) {
       screen.macroRows[from.row]!.macrosIds[from.column] = ''
       screen.macroRows[to.row]!.macrosIds[to.column] = macroId
-      maybeBroadcast()
+      send({ type: 'move-macro', screenId, from, to })
     }
   }
 
@@ -258,8 +298,9 @@ export const useMacroStore = defineStore('Macro', () => {
     deleteMacro,
     moveMacro,
     triggerMacro,
-    setState,
-    setBroadcastFn,
+    applySnapshot,
+    applyPatch,
+    setSendFn,
     updateSettings,
   }
 })
