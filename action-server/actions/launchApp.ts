@@ -1,4 +1,4 @@
-import { ActionType, type Action } from '../../types/index'
+import { ActionType, type Action } from '../../shared/types'
 import { executeSpawn } from './commandExecutor'
 
 const isUrl = (value: string): boolean => /^[a-z][a-z0-9+.-]*:/i.test(value)

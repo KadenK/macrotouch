@@ -1,5 +1,5 @@
-import { ActionType, type Action } from '../../types/index'
-import { getDefaultShell, getPlatform } from '../platform'
+import { ActionType, type Action } from '../../shared/types'
+import { getDefaultShell, getPlatform } from '../../shared/platform'
 import { executeCommand } from './commandExecutor'
 
 const action: Action = {

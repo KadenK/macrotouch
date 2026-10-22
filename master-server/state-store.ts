@@ -1,5 +1,5 @@
-import type { MacroScreen, MacroState, ScreenRow } from '../../types'
-import type { ProtocolError, StateCommand, StatePatch } from '../../shared/protocol'
+import type { MacroScreen, MacroState, ScreenRow } from '../shared/types'
+import type { ProtocolError, StateCommand, StatePatch } from '../shared/protocol'
 import { emptyState } from './state-file'
 
 /**

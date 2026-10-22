@@ -1,4 +1,4 @@
-import type { Macro } from '../../types'
+import type { Macro } from '../shared/types'
 import { actions } from './actions'
 
 export function handleMacroTrigger(macro: Macro) {

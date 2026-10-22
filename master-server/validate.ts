@@ -1,4 +1,4 @@
-import type { ClientToMasterMessage, ProtocolError, StateCommand } from '../../shared/protocol'
+import type { ClientToMasterMessage, DesktopToMasterMessage, ProtocolError, StateCommand } from '../shared/protocol'
 
 /**
  * Turns a raw socket frame into a typed message, or says why it can't.
@@ -63,7 +63,7 @@ function validateCommand(m: Record<string, unknown>): StateCommand | ProtocolErr
   }
 }
 
-export function parseClientMessage(raw: string): ClientToMasterMessage | ProtocolError {
+export function parseClientMessage(raw: string): ClientToMasterMessage | DesktopToMasterMessage | ProtocolError {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -88,6 +88,8 @@ export function parseClientMessage(raw: string): ClientToMasterMessage | Protoco
       }
       return parsed as unknown as ClientToMasterMessage
     }
+    case 'quit':
+      return parsed as unknown as DesktopToMasterMessage
     case 'macro-trigger':
       if (!isStr(parsed.requestId)) return fail('macro-trigger requires requestId')
       if (!isStr(parsed.macroId)) return fail('macro-trigger requires macroId')

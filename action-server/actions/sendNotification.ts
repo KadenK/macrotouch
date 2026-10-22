@@ -1,4 +1,4 @@
-import { ActionType, type Action } from '../../types/index'
+import { ActionType, type Action } from '../../shared/types'
 
 const APP_NAME = 'MacroTouch'
 
