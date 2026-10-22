@@ -3,22 +3,22 @@ model {
   extend macrotouch.action {
     masterLink = service 'MasterConnection' {
       description 'Connects to the master server and passes messages both ways'
-      technology 'action/master-link.ts'
+      technology 'action-server/master-link.ts'
     }
 
     catalog = service 'ActionCatalog' {
       description 'Loads all action packages and lists the actions this computer can run'
-      technology 'action/catalog.ts'
+      technology 'action-server/catalog.ts'
     }
 
     runner = service 'ActionRunner' {
       description 'Runs an action using its version for this OS and returns the result'
-      technology 'action/runner.ts'
+      technology 'action-server/runner.ts'
     }
 
     monitor = service 'StateMonitor' {
       description 'Checks the live state of on-screen actions and reports changes'
-      technology 'action/state-monitor.ts'
+      technology 'action-server/state-monitor.ts'
     }
 
     actions = module 'Actions' {

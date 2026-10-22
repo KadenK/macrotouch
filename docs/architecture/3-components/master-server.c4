@@ -3,42 +3,42 @@ model {
   extend macrotouch.master {
     http = service 'WebServer' {
       description 'Serves the web app pages and this computer\'s IP address'
-      technology 'master/http.ts'
+      technology 'master-server/http.ts'
     }
 
     gateway = service 'SocketServer' {
       description 'Accepts connections from clients and action servers and passes messages along'
-      technology 'master/gateway.ts'
+      technology 'master-server/gateway.ts'
     }
 
     store = service 'StateStore' {
       description 'Holds screens, macros, and settings in memory and applies changes'
-      technology 'master/state-store.ts'
+      technology 'master-server/state-store.ts'
     }
 
     stateFile = module 'StateFile' {
       description 'Reads and writes the state file'
-      technology 'master/state-file.ts'
+      technology 'master-server/state-file.ts'
     }
 
     nodes = service 'NodeRegistry' {
       description 'Tracks connected action servers, their actions, and the latest action state'
-      technology 'master/node-registry.ts'
+      technology 'master-server/node-registry.ts'
     }
 
     watch = service 'WatchTracker' {
       description 'Works out which live actions are on screen and tells each action server'
-      technology 'master/watch-tracker.ts'
+      technology 'master-server/watch-tracker.ts'
     }
 
     launcher = service 'ActionServerLauncher' {
       description 'Starts the local action server, restarts it if it stops, and stops it on quit'
-      technology 'master/action-server-launcher.ts'
+      technology 'master-server/action-server-launcher.ts'
     }
 
     router = service 'ActionRouter' {
       description 'Finds which action server should run a macro and sends it there'
-      technology 'master/action-router.ts'
+      technology 'master-server/action-router.ts'
     }
 
     gateway -[call]-> store 'apply(command)'
