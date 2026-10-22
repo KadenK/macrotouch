@@ -12,8 +12,9 @@ import type {
   ScreenRow,
 } from '~/../shared/types'
 import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
+import { uuid } from '~/../shared/uuid'
 import { createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
-import { actions as actionList } from '~/../action-server/actions'
+import { actions as actionList } from '~/../action-server/actions/index'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 
@@ -148,7 +149,7 @@ export const useMacroStore = defineStore('Macro', () => {
     if (!macros.value[macroId]) {
       console.warn(`Macro with id ${macroId} does not exist`)
     }
-    sendFn.value?.({ type: 'macro-trigger', requestId: crypto.randomUUID(), macroId })
+    sendFn.value?.({ type: 'macro-trigger', requestId: uuid(), macroId })
   }
 
   function _addMacro(macro: Macro) {

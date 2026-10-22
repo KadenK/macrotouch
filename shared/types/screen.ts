@@ -1,3 +1,4 @@
+import { uuid } from '../uuid'
 import type { Color } from './common'
 import { createColor } from './common'
 
@@ -33,7 +34,7 @@ export function createMacroScreen(
   defaultMacroBackgroundColor?: Color,
   id?: string,
 ): MacroScreen {
-  const generatedId = id || crypto.randomUUID()
+  const generatedId = id || uuid()
   const rows: ScreenRow[] = Array(size.rows)
     .fill(0)
     .map(() => ({ macrosIds: Array(size.columns).fill('') }))

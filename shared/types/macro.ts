@@ -1,3 +1,4 @@
+import { uuid } from '../uuid'
 import type { Color } from './common'
 import { createColor } from './common'
 
@@ -23,7 +24,7 @@ export interface Macro {
 
 export function createMacro(name = 'New Macro'): Macro {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     name,
     actionId: undefined,
     icon: { source: IconSource.Library, value: 'ic:baseline-home' },

@@ -1,5 +1,5 @@
 import type { Macro } from '../shared/types'
-import { actions } from './actions'
+import { actions } from './action-map'
 
 export function handleMacroTrigger(macro: Macro) {
   if (macro && macro.actionId) {

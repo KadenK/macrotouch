@@ -70,6 +70,7 @@ import { normalizeIconValue } from '~/composables/useIconData'
 import type { Macro, Position, Icon } from '~/../shared/types'
 import { createColor, colorFromHex, colorToHex } from '~/../shared/types'
 import { IconSource } from '~/../shared/types/macro'
+import { uuid } from '~/../shared/uuid'
 
 const props = defineProps<{
   modelValue: boolean
@@ -200,7 +201,7 @@ function handleIconSelect(iconName: string) {
 }
 
 function saveMacro() {
-  const macroId = macro.value?.id || crypto.randomUUID()
+  const macroId = macro.value?.id || uuid()
   const updatedMacro: Macro = {
     id: macroId,
     name: editForm.value.name,
