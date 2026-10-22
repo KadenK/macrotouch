@@ -1,8 +1,8 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import type { MacroState } from '../../types'
-import { createDefaultSettings } from '../../types'
+import type { MacroState } from '../shared/types'
+import { createDefaultSettings } from '../shared/types'
 
 /**
  * Reads and writes the state file.

@@ -1,6 +1,6 @@
-import type { Macro } from '../../types/macro'
-import type { MacroScreen, Position } from '../../types/screen'
-import type { MacroSettings } from '../../types/state'
+import type { Macro } from '../types/macro'
+import type { MacroScreen, Position } from '../types/screen'
+import type { MacroSettings } from '../types/state'
 
 /**
  * State commands: client to master, one per user edit.

@@ -1,4 +1,4 @@
-import { getDefaultShell } from '../platform'
+import { getDefaultShell } from '../../shared/platform'
 
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
 

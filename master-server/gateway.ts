@@ -1,8 +1,8 @@
 import { WebSocketServer } from 'ws'
-import type { Macro } from '../../types'
-import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../../shared/protocol'
-import { PROTOCOL_VERSION } from '../../shared/protocol'
-import { handleMacroTrigger } from '../util/handleMacro'
+import type { Macro } from '../shared/types'
+import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../shared/protocol'
+import { PROTOCOL_VERSION } from '../shared/protocol'
+import { handleMacroTrigger } from '../action-server/handleMacro'
 import { StateFile } from './state-file'
 import { StateStore, isProtocolError } from './state-store'
 import { parseClientMessage } from './validate'
@@ -39,7 +39,16 @@ const COMMAND_TYPES = new Set<StateCommand['type']>([
   'update-settings',
 ])
 
-export function startGateway(port: number) {
+export type GatewayOptions = {
+  /** Called when Electron on this computer asks the master to stop. */
+  onQuit?: () => void
+}
+
+/** Only the desktop app on this computer may stop the master. */
+const isLoopback = (address: string | undefined) =>
+  address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
+
+export function startGateway(port: number, options: GatewayOptions = {}) {
   const stateFile = new StateFile()
   const store = new StateStore(stateFile.load())
 
@@ -93,7 +102,8 @@ export function startGateway(port: number) {
   process.once('SIGTERM', shutdown)
   process.once('beforeExit', shutdown)
 
-  wss.on('connection', (socket: WebSocketConnection) => {
+  wss.on('connection', (socket: WebSocketConnection, req: { socket: { remoteAddress?: string } }) => {
+    const fromLoopback = isLoopback(req.socket.remoteAddress)
     const client: Client = { socket, role: null, viewedScreenId: null }
     clients.set(socket, client)
     console.log('WebSocket client connected')
@@ -104,6 +114,12 @@ export function startGateway(port: number) {
       if (isProtocolError(msg)) {
         console.warn('Invalid websocket message:', msg.message)
         sendError(socket, msg)
+        return
+      }
+
+      if (msg.type === 'quit') {
+        if (fromLoopback) options.onQuit?.()
+        else sendError(socket, { code: 'invalid-message', message: 'quit is only accepted from this computer' })
         return
       }
 

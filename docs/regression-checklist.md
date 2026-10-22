@@ -28,10 +28,10 @@ of the server into Master Server / Action Server / Electron App.
 
 | Thing | Value | Notes |
 | --- | --- | --- |
-| Nuxt app | port `4321` | Electron waits on `127.0.0.1:4321`; dev server binds `0.0.0.0` |
+| Web apps | port `4321` | Served by the master server (`dist-master`); in dev, `nuxt dev` binds `4321` and the master's HTTP API moves to `4323`. Electron probes `/api/ip` and starts the master if nothing answers |
 | WebSocket server | port `4322` | overridable via `WS_PORT` / `NUXT_WS_PORT` |
 | State file | `~/.macroTouch/state.json` | overridable via `MACROTOUCH_DATA_DIR`, else `XDG_DATA_HOME` |
-| Launch modes | `npm run dev` (browser only), `npm run dev:electron`, `npm run electron:preview`, packaged `npm run dist` | Several items behave differently with and without the Electron shell — each says which |
+| Launch modes | `npm run dev` (browser only, starts Nuxt and the master), `npm run dev:electron`, `npm run electron:preview`, packaged `npm run dist` | Several items behave differently with and without the Electron shell — each says which |
 
 A full baseline needs **two passes**: once against an existing `state.json`, and once with
 `MACROTOUCH_DATA_DIR` pointed at an empty directory, because first-run behavior is its own path.
@@ -371,13 +371,14 @@ toggles, color and grid size are as saved.
 ## I. Electron shell (`EL`)
 
 **EL-01 — App launches.** `npm run dev:electron` (dev) and `npm run electron:preview` (production
-build) both open a window on the editor, after the Nuxt server is up.
+build) both open a window on the editor, after the master server is up.
 
 **EL-02 — Single instance.** Launching a second copy focuses and restores the existing window
 rather than opening a new one.
 
-**EL-03 — Server shutdown on quit.** Quitting the app leaves no orphaned Nuxt or websocket process,
-and ports `4321`/`4322` are free afterwards.
+**EL-03 — Server shutdown on quit.** If the app started the master, quitting leaves no orphaned
+master process, and ports `4321`/`4322` are free afterwards. A master that was already running (or
+started by hand) is left running.
 
 **EL-04 — External links.** A Launch App URL action opens in the system browser, not inside the
 Electron window.

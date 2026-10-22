@@ -1,4 +1,4 @@
-import type { OSPlatform } from '../util/platform'
+import type { OSPlatform } from '../platform'
 import type { Action } from './action'
 
 /** Identifies one Action Server process. Assigned by the node, stable for its lifetime. */

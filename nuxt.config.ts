@@ -1,4 +1,4 @@
-import { WEBSOCKET_PORT } from './shared/websocket'
+import { HTTP_PORT, WEBSOCKET_PORT } from './shared/websocket'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -30,31 +30,17 @@ export default defineNuxtConfig({
   // Disable SSR — Electron renders client-side only
   ssr: false,
 
-  // Use hash router so file:// URLs work in production builds
-  router: {
-    options: {
-      hashMode: process.env.NUXT_HASH_ROUTER === 'true',
-    },
-  },
-
-  // Runtime config for websocket port (customize with WS_PORT)
+  // Where the web apps find the master server. An empty host means the host
+  // that served the page.
   runtimeConfig: {
     public: {
+      masterHost: process.env.MASTER_HOST || '',
+      masterHttpPort: Number(process.env.MASTER_HTTP_PORT || HTTP_PORT),
       websocketPort: Number(process.env.WS_PORT || WEBSOCKET_PORT),
     },
   },
 
-  // Prevent Electron runtime dependencies from being traced into Nuxt/Nitro builds on macOS
-  nitro: {
-    externals: {
-      external: ['electron'],
-      traceOptions: {
-        ignore: (path: string) => path.includes('/node_modules/electron/'),
-      },
-    },
-  },
-
-  // Bind dev server to all interfaces for network access and use port 4321
+  // Dev server for UI work only; the master server is a separate process.
   devServer: {
     host: '0.0.0.0',
     port: 4321,

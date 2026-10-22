@@ -9,7 +9,7 @@
  *
  * Run against a server started with an isolated data directory:
  *
- *   MACROTOUCH_DATA_DIR=/tmp/mt-test npm run dev
+ *   MACROTOUCH_DATA_DIR=/tmp/mt-test npm run build:master && npm run start:master
  *   MACROTOUCH_DATA_DIR=/tmp/mt-test node scripts/protocol-check.mjs
  *
  * Exits non-zero if any check fails.

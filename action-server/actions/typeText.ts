@@ -1,4 +1,4 @@
-import { ActionType, type Action } from '../../types/index'
+import { ActionType, type Action } from '../../shared/types'
 import { executeCommand } from './commandExecutor'
 
 const escapeAppleScriptText = (text: string) => text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')

@@ -28,8 +28,8 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import MacroCell from '../macro/MacroCell.vue'
-import type { Position } from '~/../types'
-import { colorToHex, getContrastColor } from '~/../types'
+import type { Position } from '~/../shared/types'
+import { colorToHex, getContrastColor } from '~/../shared/types'
 
 const props = defineProps<{
   screenId: string

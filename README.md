@@ -28,7 +28,7 @@ yarn install
 bun install
 ```
 
-Start the Nuxt development server:
+Start the Nuxt dev server (UI, with hot reload) and the master server together:
 
 ```bash
 npm run dev
@@ -40,14 +40,16 @@ If you want the desktop shell during development, run the Electron dev workflow 
 npm run dev:electron
 ```
 
-The browser app runs on Nuxt's default dev port, while the touch-device websocket flow uses port `4322`.
+The web apps run on the Nuxt dev port `4321`. The master server is a separate process: its websocket is on `4322` and its HTTP API on `4323` in dev. In production the master serves the built web apps itself on `4321`.
 
 ## Scripts
 
-- `npm run dev` - start the Nuxt app.
-- `npm run dev:electron` - start Nuxt and launch Electron against the local dev server.
-- `npm run build` - build the Nuxt app for production.
-- `npm run generate` - generate a static output with hash routing enabled.
+- `npm run dev` - start the Nuxt dev server and the master server.
+- `npm run dev:electron` - start both and launch Electron against the dev server.
+- `npm run build` - generate the web apps and bundle the master server (`dist-master/`).
+- `npm run build:master` - bundle only the master server.
+- `npm run start:master` - run the bundled master server on its own.
+- `npm run generate` - generate the static web apps into `.output/public`.
 - `npm run preview` - preview the production Nuxt build locally.
 - `npm run electron:preview` - build the app and open it in Electron.
 - `npm run dist` - build and package the desktop application.
@@ -96,10 +98,10 @@ If packaging still fails, confirm that the local Nuxt and Electron runtime can s
 - `app/pages/` - application routes for home, connect, settings, and runtime screens.
 - `app/components/` - screen, macro, input, and modal components.
 - `app/stores/` - Pinia state for macros, screens, and settings.
-- `server/` - Nitro server code, including websocket and macro handling.
-- `electron/` - Electron main and preload entry points.
-- `shared/` and `types/` - shared protocol and domain types.
-- `util/actions` - action implementations that can be triggered by macros.
+- `master-server/` - the standalone master server: websocket gateway, state store and file, and static web server.
+- `action-server/` - action implementations that can be triggered by macros, and the code that runs them.
+- `electron/` - Electron main and preload entry points. Electron starts the master server if it is not already running.
+- `shared/` - protocol, domain types (`shared/types/`), and platform helpers used by every process.
 
 
 ## License

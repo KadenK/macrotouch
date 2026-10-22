@@ -26,13 +26,10 @@ export const useNetwork = () => {
     loading.value = true
     error.value = null
     try {
-      // ✅ Correct fetch to Nuxt server API
-      const data = await $fetch<{ name: string; ip: string }[]>('/api/getIP')
-
-      // ✅ Safety check: ensure data is an array
-      if (!Array.isArray(data)) {
-        throw new Error('API did not return an array')
-      }
+      const { masterHost, masterHttpPort } = useRuntimeConfig().public
+      const data = await $fetch<{ name: string; ip: string }[]>(
+        `${window.location.protocol}//${masterHost || window.location.hostname}:${masterHttpPort}/api/ip`,
+      )
 
       const currentPort = window.location.port || '3000' // default Nuxt port
       const protocol = window.location.protocol
@@ -40,11 +37,10 @@ export const useNetwork = () => {
       networkInterfaces.value = data.map((item) => ({
         name: item.name,
         ip: item.ip,
-        url: `${protocol}//${item.ip}:${currentPort}/`,
+        url: `${protocol}//${item.ip}:${currentPort}/screen`,
       }))
     } catch (err) {
       console.error('Failed to fetch host IPs:', err)
-      // ❌ Removed the inner 'error' declaration that was shadowing the outer one
       error.value = 'Could not detect local network interfaces.'
     } finally {
       loading.value = false

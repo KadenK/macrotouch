@@ -105,6 +105,9 @@ const onSwipeStart = (event: TouchEvent | PointerEvent) => {
     swipeStartY = event.clientY
   }
   swipeStartTime = Date.now()
+  // A new gesture starts clean. Otherwise a drag that never completed a swipe
+  // leaves the flag set and the next tap is swallowed.
+  isSwiping.value = false
 }
 
 const onSwipeMove = (event: TouchEvent | PointerEvent) => {

@@ -1,5 +1,5 @@
-import type { Action } from '../../types/action'
-import actionClasses from '../../util/actions/index'
+import type { Action } from '../shared/types/action'
+import actionClasses from './actions/index'
 
 export type ActionsMap = Record<string, Action>
 export const actions: ActionsMap = {}

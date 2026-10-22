@@ -30,3 +30,4 @@ logs
 # user-specific settings
 data/
 _site
+dist-master
