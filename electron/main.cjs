@@ -31,12 +31,19 @@ if (!gotSingleInstanceLock) {
 // Keep a global reference to prevent garbage collection
 let mainWindow = null
 
-let nuxtProcess = null
-let shutdownInProgress = false
-// For external client access, bind to all interfaces. For local app URL, use localhost.
-const SERVER_BIND_HOST = '0.0.0.0'
-const LOCAL_URL_HOST = '127.0.0.1'
-const LOCAL_PORT = 4321
+// Where the master server lives. Mirrors DEFAULT_MASTER in shared/websocket.ts
+// (this file cannot import TypeScript); change both together. Pointing the app at
+// a remote master later starts here.
+const MASTER = {
+  host: '127.0.0.1',
+  httpPort: Number(process.env.MACROTOUCH_HTTP_PORT || 4321),
+  wsPort: Number(process.env.WS_PORT || 4322),
+}
+const MASTER_URL = `http://${MASTER.host}:${MASTER.httpPort}`
+
+// Set only when this app started the master, so only then does it stop it on quit.
+let masterProcess = null
+let quitting = false
 
 function isDevelopmentMode() {
   const envIsDev = process.env.NODE_ENV !== 'production'
@@ -44,151 +51,91 @@ function isDevelopmentMode() {
   return envIsDev && !appIsPackaged
 }
 
-function waitForServer(host, port, timeout = 15000) {
-  const start = Date.now()
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const req = http.request({ method: 'HEAD', host, port, path: '/' }, (res) => {
-        res.resume()
-        resolve()
-      })
-      req.on('error', () => {
-        if (Date.now() - start > timeout) {
-          reject(new Error(`Server did not start on ${host}:${port} in ${timeout}ms`))
-        } else {
-          setTimeout(check, 200)
-        }
-      })
-      req.end()
-    }
-    check()
+function isMasterRunning() {
+  return new Promise((resolve) => {
+    const req = http.get({ host: MASTER.host, port: MASTER.httpPort, path: '/api/ip', timeout: 1000 }, (res) => {
+      res.resume()
+      resolve(res.statusCode === 200)
+    })
+    req.on('timeout', () => req.destroy())
+    req.on('error', () => resolve(false))
   })
 }
 
-function stopNuxtServer() {
-  if (!nuxtProcess || shutdownInProgress) {
-    return
+async function waitForMaster(timeout = 15000) {
+  const start = Date.now()
+  while (Date.now() - start < timeout) {
+    if (await isMasterRunning()) return
+    await new Promise((resolve) => setTimeout(resolve, 200))
   }
-
-  shutdownInProgress = true
-
-  const { pid } = nuxtProcess
-  if (!pid) {
-    nuxtProcess = null
-    shutdownInProgress = false
-    return
-  }
-
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill', ['/PID', `${pid}`, '/T', '/F'], {
-      stdio: 'ignore',
-    })
-
-    killer.on('exit', () => {
-      nuxtProcess = null
-      shutdownInProgress = false
-    })
-
-    killer.on('error', (err) => {
-      console.error('Failed to stop Nuxt server tree:', err)
-      try {
-        nuxtProcess.kill('SIGTERM')
-      } catch (killErr) {
-        console.error('Failed to stop Nuxt server process:', killErr)
-      }
-      nuxtProcess = null
-      shutdownInProgress = false
-    })
-
-    return
-  }
-
-  try {
-    process.kill(-pid, 'SIGTERM')
-  } catch (err) {
-    console.error('Failed to stop Nuxt server process group:', err)
-    try {
-      nuxtProcess.kill('SIGTERM')
-    } catch (killErr) {
-      console.error('Failed to stop Nuxt server process:', killErr)
-    }
-  }
-
-  setTimeout(() => {
-    if (nuxtProcess && nuxtProcess.pid === pid) {
-      try {
-        process.kill(-pid, 'SIGKILL')
-      } catch {
-        // Ignore if the process group already exited.
-      }
-      try {
-        nuxtProcess.kill('SIGKILL')
-      } catch {
-        // Ignore if the process already exited.
-      }
-    }
-    nuxtProcess = null
-    shutdownInProgress = false
-  }, 1500)
+  throw new Error(`Master server did not start on ${MASTER.host}:${MASTER.httpPort} in ${timeout}ms`)
 }
 
-async function startNuxtServer() {
-  if (isDevelopmentMode()) {
-    return
-  }
-
-  if (nuxtProcess) {
+async function ensureMaster() {
+  if (await isMasterRunning()) {
+    console.log(`Using master server already running at ${MASTER_URL}`)
     return
   }
 
   const appRoot = app.isPackaged ? app.getAppPath() : path.join(__dirname, '..')
-  const serverEntry = path.join(appRoot, '.output', 'server', 'index.mjs')
-  console.log(`Starting Nuxt server from ${appRoot} on ${SERVER_BIND_HOST}:${LOCAL_PORT}`)
-
-  if (fs.existsSync(serverEntry)) {
-    nuxtProcess = spawn(process.execPath, [serverEntry], {
-      cwd: appRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: process.platform !== 'win32',
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        NODE_ENV: 'production',
-        NITRO_HOST: SERVER_BIND_HOST,
-        PORT: `${LOCAL_PORT}`,
-      },
-    })
-  } else {
-    const runner = process.platform === 'win32' ? 'npx.cmd' : 'npx'
-    nuxtProcess = spawn(runner, ['nuxi', 'preview', '--port', `${LOCAL_PORT}`], {
-      cwd: appRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      detached: process.platform !== 'win32',
-      env: { ...process.env, NODE_ENV: 'production', NITRO_HOST: SERVER_BIND_HOST },
-    })
+  const entry = path.join(appRoot, 'dist-master', 'index.mjs')
+  if (!fs.existsSync(entry)) {
+    throw new Error(`Master server bundle not found at ${entry}; run "npm run build:master"`)
   }
 
-  if (process.platform !== 'win32') {
-    nuxtProcess.unref()
-  }
-
-  nuxtProcess.stdout.on('data', (data) => {
-    console.log(`[nuxt] ${data.toString().trim()}`)
+  console.log(`Starting master server from ${entry}`)
+  // Detached so the master is its own process, not tied to this window's lifetime.
+  masterProcess = spawn(process.execPath, [entry], {
+    cwd: appRoot,
+    stdio: 'ignore',
+    detached: true,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      MACROTOUCH_STATIC_DIR: path.join(appRoot, '.output', 'public'),
+    },
   })
-  nuxtProcess.stderr.on('data', (data) => {
-    console.error(`[nuxt] ${data.toString().trim()}`)
+  masterProcess.unref()
+  masterProcess.on('error', (err) => console.error('Master server failed to start:', err))
+  masterProcess.on('exit', (code, signal) => {
+    console.log(`Master server exited: code=${code} signal=${signal}`)
+    masterProcess = null
   })
 
-  nuxtProcess.on('exit', (code, signal) => {
-    console.log(`Nuxt preview process exited: code=${code} signal=${signal}`)
-    nuxtProcess = null
-  })
+  await waitForMaster()
+}
 
-  nuxtProcess.on('error', (err) => {
-    console.error('Nuxt preview process failed:', err)
-  })
+/** Asks the master to shut down over the websocket; falls back to killing it. */
+function stopMaster() {
+  const child = masterProcess
+  if (!child) return Promise.resolve()
 
-  await waitForServer(LOCAL_URL_HOST, LOCAL_PORT)
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // Already gone.
+      }
+      resolve()
+    }, 2000)
+
+    try {
+      const socket = new WebSocket(`ws://${MASTER.host}:${MASTER.wsPort}`)
+      socket.onopen = () => socket.send(JSON.stringify({ type: 'quit' }))
+      socket.onclose = done
+      socket.onerror = () => {}
+      child.once('exit', done)
+    } catch (err) {
+      console.error('Failed to ask the master to quit:', err)
+      done()
+    }
+  })
 }
 
 function createWindow() {
@@ -221,12 +168,10 @@ function createWindow() {
 
   if (isDev) {
     // In development, load from the Nuxt dev server
-    const devUrl = process.env.NUXT_DEV_URL || `http://${LOCAL_URL_HOST}:${LOCAL_PORT}`
-    mainWindow.loadURL(devUrl)
+    mainWindow.loadURL(`${process.env.NUXT_DEV_URL || 'http://127.0.0.1:4321'}/home`)
     mainWindow.webContents.openDevTools()
   } else {
-    // In production, use local host for in-app instance while server binds all interfaces for external clients
-    mainWindow.loadURL(`http://${LOCAL_URL_HOST}:${LOCAL_PORT}/#home`)
+    mainWindow.loadURL(`${MASTER_URL}/home`)
   }
 
   // Open external links in the default browser instead of Electron
@@ -253,9 +198,9 @@ app.whenReady().then(async () => {
   }
 
   try {
-    await startNuxtServer()
+    await ensureMaster()
   } catch (err) {
-    console.error('Failed to start Nuxt server:', err)
+    console.error('Failed to start master server:', err)
   }
 
   createWindow()
@@ -308,19 +253,17 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // On macOS, keep the app running until Command+Q
   if (process.platform !== 'darwin') {
-    stopNuxtServer()
     app.quit()
   }
 })
 
-app.on('before-quit', () => {
-  stopNuxtServer()
+app.on('before-quit', (event) => {
+  if (quitting || !masterProcess) return
+  // Hold the quit until the master has been asked to stop.
+  event.preventDefault()
+  quitting = true
+  stopMaster().finally(() => app.quit())
 })
 
-process.on('SIGINT', () => {
-  stopNuxtServer()
-})
-
-process.on('SIGTERM', () => {
-  stopNuxtServer()
-})
+process.on('SIGINT', () => app.quit())
+process.on('SIGTERM', () => app.quit())

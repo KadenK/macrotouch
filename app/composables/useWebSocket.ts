@@ -30,8 +30,9 @@ const createWebSocket = () => {
     if (ws.value) return // already connected/connecting
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname
-    const port = useRuntimeConfig().public.websocketPort || WEBSOCKET_PORT
+    const { masterHost, websocketPort } = useRuntimeConfig().public
+    const host = masterHost || window.location.hostname
+    const port = websocketPort || WEBSOCKET_PORT
     ws.value = new WebSocket(`${protocol}//${host}:${port}`)
 
     ws.value.onopen = () => {

@@ -15,18 +15,20 @@
   },
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "nuxt dev",
-    "dev:electron": "concurrently -k \"nuxt dev\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development electron .\"",
-    "build": "nuxt build",
-    "generate": "cross-env NUXT_HASH_ROUTER=true nuxt generate",
-    "preview": "nuxt preview",
+    "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\"",
+    "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
+    "build": "npm run generate && npm run build:master",
+    "generate": "nuxt generate",
+    "preview": "npm run start:master",
     "postinstall": "nuxt prepare",
     "electron:preview": "npm run build && cross-env NODE_ENV=production electron .",
     "dist": "npm run build && cross-env NODE_ENV=production electron-builder",
     "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64",
     "docs": "likec4 start docs/architecture",
-    "typecheck:protocol": "tsc -p tsconfig.protocol.json",
-    "test:protocol": "node scripts/protocol-check.mjs"
+    "test:protocol": "node scripts/protocol-check.mjs",
+    "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws --external:node-notifier",
+    "start:master": "node dist-master/index.mjs",
+    "typecheck:protocol": "tsc -p tsconfig.protocol.json"
   },
   "dependencies": {
     "@iconify-json/codicon": "^1.2.51",
@@ -54,11 +56,13 @@
     "cross-env": "^10.1.0",
     "electron": "^40.6.0",
     "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "likec4": "^1.59.4",
     "postcss-nested": "^7.0.2",
+    "tsx": "^4.23.15",
     "wait-on": "^9.0.4"
   },
   "build": {
@@ -71,7 +75,8 @@
     },
     "files": [
       "electron/**/*",
-      ".output/**/*"
+      "dist-master/**/*",
+      ".output/public/**/*"
     ],
     "linux": {
       "target": [
