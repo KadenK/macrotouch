@@ -7,32 +7,72 @@
  * It covers the checklist items a browser can reach: ST, SC, MC, SE, PA and RT.
  * The wire-level items live in `protocol-check.mjs`; the two are complementary.
  *
- * Build first, then run against a scratch data directory so your own
- * ~/.macroTouch is never touched:
+ * Build first, then run it — it finds the binary under dist-electron/ and uses
+ * a throwaway data directory, so your own ~/.macroTouch is never touched:
  *
  *   npm run dist
- *   APP_BIN="dist-electron/mac-arm64/MacroTouch.app/Contents/MacOS/MacroTouch" \
- *   DATA_DIR=/tmp/mt-ui MARKER=/tmp/mt-ui-marker npm run test:ui
+ *   npm run test:ui
  *
- * Nothing may be listening on 4321/4322 when it starts: the app reuses a master
- * that is already running, and a stale one carries state from the last run,
- * which fails checks for the wrong reason.
+ * APP_BIN and DATA_DIR override either default if you need them to.
  *
  * Exits non-zero if any check fails.
  */
 
 import { _electron as electron } from 'playwright'
 import fs from 'node:fs'
+import net from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 
-const APP = process.env.APP_BIN
-const DATA = process.env.DATA_DIR
-const MARKER = process.env.MARKER || `${DATA}/ui-check-marker`
+const BASE = 'http://127.0.0.1:4321'
 
-if (!APP || !DATA) {
-  console.error('Set APP_BIN (the packaged binary) and DATA_DIR (an empty scratch directory).')
+/** The packaged binary, wherever electron-builder put it for this platform. */
+function findApp() {
+  const out = 'dist-electron'
+  if (!fs.existsSync(out)) return null
+  const candidates = []
+  for (const dir of fs.readdirSync(out)) {
+    candidates.push(
+      path.join(out, dir, 'MacroTouch.app/Contents/MacOS/MacroTouch'), // mac
+      path.join(out, dir, 'MacroTouch'), // linux
+      path.join(out, dir, 'MacroTouch.exe'), // windows
+    )
+  }
+  return candidates.find((c) => fs.existsSync(c) && fs.statSync(c).isFile()) ?? null
+}
+
+/** The app reuses a master that is already up, and its stale state fails checks for the wrong reason. */
+function portFree(port) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: '127.0.0.1', port }, () => {
+      socket.destroy()
+      resolve(false)
+    })
+    socket.on('error', () => resolve(true))
+    socket.setTimeout(500, () => {
+      socket.destroy()
+      resolve(true)
+    })
+  })
+}
+
+const APP = process.env.APP_BIN || findApp()
+if (!APP) {
+  console.error('No packaged app found under dist-electron/. Run `npm run dist` first, or set APP_BIN.')
   process.exit(2)
 }
-const BASE = 'http://127.0.0.1:4321'
+for (const port of [4321, 4322]) {
+  if (!(await portFree(port))) {
+    console.error(`Something is already listening on ${port}. Quit any running MacroTouch or master first:`)
+    console.error('  pkill -f "MacroTouch.app/Contents/MacOS/MacroTouch"; pkill -f dist-master/index.mjs')
+    process.exit(2)
+  }
+}
+
+const DATA = process.env.DATA_DIR || fs.mkdtempSync(path.join(os.tmpdir(), 'mt-ui-'))
+const MARKER = process.env.MARKER || path.join(DATA, 'ui-check-marker')
+console.log(`app       → ${APP}`)
+console.log(`data dir  → ${DATA}`)
 
 const results = []
 const sec = (n) => console.log(`\n${n}`)
