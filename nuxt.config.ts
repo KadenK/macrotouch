@@ -3,7 +3,7 @@ import { HTTP_PORT, WEBSOCKET_PORT } from './shared/websocket'
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
-  devtools: { enabled: false },
+  devtools: { enabled: true },
   css: ['~/assets/css/theme.css'],
 
   app: {

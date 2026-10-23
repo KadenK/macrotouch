@@ -2,7 +2,8 @@ import { WebSocketServer } from 'ws'
 import type { Macro } from '../shared/types'
 import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../shared/protocol'
 import { PROTOCOL_VERSION } from '../shared/protocol'
-import { handleMacroTrigger } from '../action-server/handleMacro'
+import { ActionRouter } from './action-router'
+import { NodeRegistry } from './node-registry'
 import { StateFile } from './state-file'
 import { StateStore, isProtocolError } from './state-store'
 import { parseClientMessage } from './validate'
@@ -26,7 +27,7 @@ export type WebSocketConnection = {
 type Client = {
   socket: WebSocketConnection
   role: ProtocolRole | null
-  /** Recorded for MAC-41 (catalogs) and Demo 2 (watch tracking). Unused here. */
+  /** Recorded for Demo 2 watch tracking. Unused here. */
   viewedScreenId: string | null
 }
 
@@ -51,6 +52,8 @@ const isLoopback = (address: string | undefined) =>
 export function startGateway(port: number, options: GatewayOptions = {}) {
   const stateFile = new StateFile()
   const store = new StateStore(stateFile.load())
+  const nodes = new NodeRegistry()
+  const router = new ActionRouter(nodes)
 
   const wss = new WebSocketServer({ port })
   let listening = false
@@ -76,10 +79,20 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
   const sendError = (socket: WebSocketConnection, error: ProtocolError, requestId?: string) =>
     send(socket, { type: 'error', error, ...(requestId ? { requestId } : {}) })
 
-  /** Patches go to every client, the sender included — one apply path everywhere. */
+  /** Patches go to every editor and controller, the sender included. */
   const broadcast = (msg: MasterToClientMessage) => {
-    for (const { socket } of clients.values()) send(socket, msg)
+    for (const { socket, role } of clients.values()) {
+      if (role !== 'node') send(socket, msg)
+    }
   }
+
+  // An action server usually registers after the editor's snapshot, so editors
+  // are told whenever the set of catalogs changes.
+  nodes.onChange(() => {
+    for (const { socket, role } of clients.values()) {
+      if (role === 'editor') send(socket, { type: 'catalogs', catalogs: nodes.catalogs() })
+    }
+  })
 
   const shutdown = () => {
     if (isShuttingDown) return
@@ -135,13 +148,33 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
           return
         }
 
+        if (msg.role === 'node') {
+          // Temporary local-only security measure until we have a proper authentication system. Nodes are only accepted from this computer.
+          if (!fromLoopback) {
+            sendError(socket, {
+              code: 'invalid-message',
+              message: 'node connections are only accepted from this computer',
+            })
+            socket.close()
+            return
+          }
+          client.role = 'node'
+          nodes.register(socket, msg)
+          return
+        }
+
+        nodes.remove(socket)
         client.role = msg.role
         if (msg.role === 'controller' && msg.screenId) client.viewedScreenId = msg.screenId
 
-        // Demo 1 sends state only. `catalogs` arrives with the Action Server
-        // (MAC-41), `actionState` with Demo 2 — an absent field means "no
-        // producer", which is not the same as an empty one.
-        send(socket, { type: 'snapshot', protocolVersion: PROTOCOL_VERSION, state: store.getState() })
+        // Action state is not included yet; an absent field means there is no
+        // producer, which differs from an empty one.
+        send(socket, {
+          type: 'snapshot',
+          protocolVersion: PROTOCOL_VERSION,
+          state: store.getState(),
+          ...(msg.role === 'editor' ? { catalogs: nodes.catalogs() } : {}),
+        })
         return
       }
 
@@ -151,15 +184,29 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
         return
       }
 
+      if (msg.type === 'action-result') {
+        if (client.role === 'node') console.log(`[action-server] action ${msg.requestId}: ${msg.ok ? 'ok' : 'error'}`)
+        else sendError(socket, { code: 'invalid-message', message: 'action-result requires a node connection' })
+        return
+      }
+
+      if (msg.type === 'action-state') {
+        sendError(socket, { code: 'invalid-message', message: 'action-state is not supported' })
+        return
+      }
+
+      if (client.role === 'node') {
+        sendError(socket, { code: 'invalid-message', message: 'node message is not supported' })
+        return
+      }
+
       if (msg.type === 'macro-trigger') {
         const macro: Macro | undefined = store.getState().macros[msg.macroId]
         if (!macro) {
           console.warn('Received macro trigger for unknown macro ID', msg.macroId)
           return
         }
-        // Fire-and-forget, as today (RT-02). `action-result` has no producer
-        // until the Action Server lands in MAC-41.
-        handleMacroTrigger(macro)
+        router.trigger(macro)
         return
       }
 
@@ -182,6 +229,7 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
     })
 
     socket.on('close', () => {
+      nodes.remove(socket)
       clients.delete(socket)
       console.log('WebSocket client disconnected')
     })
@@ -194,5 +242,5 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
   void listening
   console.log(`WebSocket server started on port ${port}`)
 
-  return { store, stateFile, broadcast, shutdown }
+  return { store, stateFile, nodes, broadcast, shutdown }
 }

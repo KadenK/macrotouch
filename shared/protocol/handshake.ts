@@ -43,17 +43,29 @@ export type ProtocolRole = Hello['role']
  * The master's reply to a client `hello`: everything that client needs before
  * it can render.
  *
- * `catalogs` arrives with the Action Server (MAC-41) and `actionState` with
- * live action state (Demo 2). Both are omitted until something produces them —
- * an absent field means "not available", an empty one would mean "nothing to
- * show", and those are different.
+ * `catalogs` is sent to editors only. `actionState` arrives with live action
+ * state (Demo 2) and is omitted until something produces it — an absent field
+ * means "not available", an empty one would mean "nothing to show", and those
+ * are different. An action server usually registers after an editor connects,
+ * so editors also get {@link CatalogsMessage} when the set of nodes changes.
  */
 export interface Snapshot {
   type: 'snapshot'
   protocolVersion: number
   state: MacroState
-  /** Editor only. One catalog per connected node. */
+  /** Editor only. One catalog per connected node; empty when none is connected. */
   catalogs?: Record<NodeId, ActionCatalog>
   /** Controller only. Demo 2. */
   actionState?: Record<ActionStateKey, ActionStateEntry>
+}
+
+/**
+ * Master to editor: the connected nodes changed, so here are all their catalogs.
+ *
+ * Replaces the editor's catalogs outright. Sent when a node registers or
+ * disconnects.
+ */
+export interface CatalogsMessage {
+  type: 'catalogs'
+  catalogs: Record<NodeId, ActionCatalog>
 }
