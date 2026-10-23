@@ -17,6 +17,7 @@
 
 import { WebSocket } from 'ws'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
 const WS_URL = process.env.WS_URL ?? 'ws://127.0.0.1:4322'
@@ -229,10 +230,35 @@ async function main() {
     assert('macros' in snapshot.state && 'screens' in snapshot.state, 'state is missing macros/screens')
   })
 
-  await check('snapshot omits catalogs and actionState entirely', async () => {
-    const { snapshot } = await connected('editor')
-    assert(!('catalogs' in snapshot), 'catalogs should be absent in Demo 1, not empty')
-    assert(!('actionState' in snapshot), 'actionState should be absent in Demo 1, not empty')
+  await check('an editor snapshot carries catalogs; a controller snapshot carries neither extra', async () => {
+    const editor = await connected('editor')
+    assert(
+      editor.snapshot.catalogs && typeof editor.snapshot.catalogs === 'object',
+      'editor snapshot should include catalogs (empty when no node is connected)',
+    )
+    assert(!('actionState' in editor.snapshot), 'actionState should be absent until Demo 2')
+    const controller = await connected('controller')
+    assert(!('catalogs' in controller.snapshot), 'controller snapshot should not include catalogs')
+    assert(!('actionState' in controller.snapshot), 'actionState should be absent until Demo 2')
+  })
+
+  await check('editors are sent catalogs when a node registers and disconnects', async () => {
+    const { c: editor } = await connected('editor')
+    const nodeId = uid('node')
+    const node = await connect()
+    node.send({
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId,
+      label: 'Harness catalog node',
+      platform: 'linux',
+      catalog: { groups: [{ id: 'g', label: 'G', actions: [{ actionId: 'x', label: 'X', actionFields: [] }] }] },
+    })
+    const added = await editor.next((m) => m.type === 'catalogs' && nodeId in m.catalogs)
+    assert(added.catalogs[nodeId].groups[0].actions[0].actionId === 'x', 'catalog content was not forwarded')
+    node.close()
+    await editor.next((m) => m.type === 'catalogs' && !(nodeId in m.catalogs))
   })
 
   await check('a controller may announce the screen it is viewing', async () => {
@@ -253,11 +279,20 @@ async function main() {
     await c.waitClose()
   })
 
-  await check('a browser client cannot claim role: node', async () => {
+  await check('a loopback node hello is accepted without a reply', async () => {
     const c = await connect()
-    c.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'node' })
-    const msg = await c.next(isError)
-    assert(msg.error.code === 'invalid-message', `expected invalid-message, got ${msg.error.code}`)
+    c.send({
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId: uid('node'),
+      label: 'Harness fake node',
+      platform: 'linux',
+      catalog: { groups: [] },
+    })
+    const seen = await c.quiet()
+    assert(seen.length === 0, `expected no reply to a node hello, got ${JSON.stringify(seen)}`)
+    assert(!c.closed, 'the node connection was closed')
   })
 
   /* -- commands and patches ----------------------------------------------- */
@@ -354,6 +389,32 @@ async function main() {
 
     c.send({ type: 'update-settings', settings: { swipeToChangeScreens: true } })
     await c.next(isPatch)
+  })
+
+  /* -- action routing ------------------------------------------------------ */
+  section('Action routing')
+
+  await check('macro-trigger runs the action in the action server', async () => {
+    // The server under test launches its own local action server, which gets
+    // the trigger. The harness shares its machine, so the effect is a file.
+    const marker = path.join(os.tmpdir(), `mt-protocol-check-${Date.now()}`)
+    const { c: editor } = await connected('editor')
+    const macro = {
+      ...makeMacro('Harness shell command'),
+      actionId: 'shellCommand',
+      parameters: { command: `touch "${marker}"` },
+    }
+    editor.send({ type: 'upsert-macro', macro })
+    await editor.next(isPatch)
+
+    const { c: controller } = await connected('controller')
+    controller.send({ type: 'macro-trigger', requestId: uid('request'), macroId: macro.id })
+
+    const deadline = Date.now() + TIMEOUT
+    while (!fs.existsSync(marker) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 100))
+    const ran = fs.existsSync(marker)
+    fs.rmSync(marker, { force: true })
+    assert(ran, 'the action server did not run the shell command (is it connected to the master?)')
   })
 
   await check('an oversized row is clamped to the declared columns (SC-06)', async () => {

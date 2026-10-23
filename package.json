@@ -17,7 +17,7 @@
   "scripts": {
     "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\"",
     "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
-    "build": "npm run generate && npm run build:master",
+    "build": "npm run generate && npm run build:master && npm run build:action",
     "generate": "nuxt generate",
     "preview": "npm run start:master",
     "postinstall": "nuxt prepare",
@@ -26,8 +26,10 @@
     "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64",
     "docs": "likec4 start docs/architecture",
     "test:protocol": "node scripts/protocol-check.mjs",
-    "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws --external:node-notifier",
+    "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws",
+    "build:action": "esbuild action-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-action/index.mjs --external:ws --external:node-notifier",
     "start:master": "node dist-master/index.mjs",
+    "start:action": "node dist-action/index.mjs",
     "typecheck:protocol": "tsc -p tsconfig.protocol.json"
   },
   "dependencies": {
@@ -76,6 +78,7 @@
     "files": [
       "electron/**/*",
       "dist-master/**/*",
+      "dist-action/**/*",
       ".output/public/**/*"
     ],
     "linux": {

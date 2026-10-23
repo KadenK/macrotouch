@@ -1,6 +1,7 @@
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { HTTP_PORT, WEBSOCKET_PORT } from '../shared/websocket'
+import { DEFAULT_MASTER, HTTP_PORT, WEBSOCKET_PORT } from '../shared/websocket'
+import { createActionServerLauncher } from './action-server-launcher'
 import { startGateway } from './gateway'
 import { startHttpServer } from './http'
 
@@ -13,6 +14,10 @@ import { startHttpServer } from './http'
 
 const wsPort = Number(process.env.WS_PORT || process.env.NUXT_WS_PORT || WEBSOCKET_PORT)
 const httpPort = Number(process.env.MACROTOUCH_HTTP_PORT || process.env.PORT || HTTP_PORT)
+// These will become command line options or user settings in the future, but for now they are hardcoded.
+const USE_LOCAL_ACTION_SERVER = true
+const masterUrl = `ws://${DEFAULT_MASTER.host}:${wsPort}`
+const launcher = USE_LOCAL_ACTION_SERVER ? createActionServerLauncher({ masterUrl }) : undefined
 const here = path.dirname(fileURLToPath(import.meta.url))
 const staticDir = process.env.MACROTOUCH_STATIC_DIR || path.join(here, '..', '.output', 'public')
 
@@ -22,19 +27,24 @@ http.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1)
 })
 
+let stopping = false
+const stop = async () => {
+  if (stopping) return
+  stopping = true
+  gateway.shutdown()
+  http.close()
+  http.closeAllConnections()
+  await launcher?.stop()
+  process.exit(0)
+}
+
 const gateway = startGateway(wsPort, {
   onQuit: () => {
     console.log('Quit requested, shutting down')
-    gateway.shutdown()
-    http.close()
-    http.closeAllConnections()
-    process.exit(0)
+    void stop()
   },
 })
+launcher?.start()
 
-const stop = () => {
-  http.close()
-  http.closeAllConnections()
-}
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)

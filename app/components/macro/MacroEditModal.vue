@@ -167,8 +167,20 @@ watch(
         freshParams[field.key] = actionParameters.value[field.key] ?? ''
       }
       actionParameters.value = freshParams
-    } else {
+    } else if (!newActionId) {
       actionParameters.value = {}
+    }
+    // An action missing from the catalog (not loaded yet, or its node is
+    // offline) keeps its parameters so saving does not lose them.
+  },
+)
+
+// The catalog can arrive after a new-macro modal is already open.
+watch(
+  () => store.actions,
+  (available) => {
+    if (isOpen.value && !macro.value && !selectedActionId.value) {
+      selectedActionId.value = available[0]?.actionId ?? ''
     }
   },
 )

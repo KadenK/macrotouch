@@ -2,6 +2,7 @@ import { useRuntimeConfig } from '#app'
 import { WEBSOCKET_PORT } from '../../shared/websocket'
 import { PROTOCOL_VERSION } from '../../shared/protocol'
 import type {
+  CatalogsMessage,
   ClientToMasterMessage,
   MasterToClientMessage,
   ProtocolError,
@@ -12,6 +13,7 @@ import type {
 type WebSocketHandlers = {
   snapshot?: (snapshot: Snapshot) => void
   patch?: (patch: StatePatch) => void
+  catalogs?: (catalogs: CatalogsMessage['catalogs']) => void
   error?: (error: ProtocolError) => void
   open?: () => void
   close?: () => void
@@ -64,6 +66,9 @@ const createWebSocket = () => {
           break
         case 'state-patch':
           handlers.patch?.(data)
+          break
+        case 'catalogs':
+          handlers.catalogs?.(data.catalogs)
           break
         case 'error':
           handlers.error?.(data.error)

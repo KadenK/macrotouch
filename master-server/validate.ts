@@ -1,4 +1,10 @@
-import type { ClientToMasterMessage, DesktopToMasterMessage, ProtocolError, StateCommand } from '../shared/protocol'
+import type {
+  ClientToMasterMessage,
+  DesktopToMasterMessage,
+  NodeToMasterMessage,
+  ProtocolError,
+  StateCommand,
+} from '../shared/protocol'
 
 /**
  * Turns a raw socket frame into a typed message, or says why it can't.
@@ -63,7 +69,9 @@ function validateCommand(m: Record<string, unknown>): StateCommand | ProtocolErr
   }
 }
 
-export function parseClientMessage(raw: string): ClientToMasterMessage | DesktopToMasterMessage | ProtocolError {
+export function parseClientMessage(
+  raw: string,
+): ClientToMasterMessage | NodeToMasterMessage | DesktopToMasterMessage | ProtocolError {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -78,10 +86,20 @@ export function parseClientMessage(raw: string): ClientToMasterMessage | Desktop
     case 'hello': {
       if (typeof parsed.protocolVersion !== 'number') return fail('hello requires a numeric protocolVersion')
       const role = parsed.role
-      if (role !== 'editor' && role !== 'controller') {
-        // A browser client cannot announce itself as a node — the direction
-        // union says so, and so does this.
-        return fail(`hello role must be editor or controller, got ${String(role)}`)
+      if (role !== 'editor' && role !== 'controller' && role !== 'node') {
+        return fail(`hello role must be editor, controller or node, got ${String(role)}`)
+      }
+      if (role === 'node') {
+        if (
+          !isStr(parsed.nodeId) ||
+          !isStr(parsed.label) ||
+          !isStr(parsed.platform) ||
+          !isObj(parsed.catalog) ||
+          !Array.isArray(parsed.catalog.groups)
+        ) {
+          return fail('node hello requires nodeId, label, platform and catalog.groups')
+        }
+        return parsed as unknown as NodeToMasterMessage
       }
       if (role === 'controller' && parsed.screenId !== undefined && !isStr(parsed.screenId)) {
         return fail('controller hello screenId must be a string when present')
@@ -90,6 +108,11 @@ export function parseClientMessage(raw: string): ClientToMasterMessage | Desktop
     }
     case 'quit':
       return parsed as unknown as DesktopToMasterMessage
+    case 'action-result':
+      if (!isStr(parsed.requestId) || typeof parsed.ok !== 'boolean') {
+        return fail('action-result requires requestId and ok')
+      }
+      return parsed as unknown as NodeToMasterMessage
     case 'macro-trigger':
       if (!isStr(parsed.requestId)) return fail('macro-trigger requires requestId')
       if (!isStr(parsed.macroId)) return fail('macro-trigger requires macroId')

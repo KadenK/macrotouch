@@ -48,7 +48,9 @@ The web apps run on the Nuxt dev port `4321`. The master server is a separate pr
 - `npm run dev:electron` - start both and launch Electron against the dev server.
 - `npm run build` - generate the web apps and bundle the master server (`dist-master/`).
 - `npm run build:master` - bundle only the master server.
+- `npm run build:action` - bundle the action server (`dist-action/`).
 - `npm run start:master` - run the bundled master server on its own.
+- `npm run start:action` - run the bundled action server on its own.
 - `npm run generate` - generate the static web apps into `.output/public`.
 - `npm run preview` - preview the production Nuxt build locally.
 - `npm run electron:preview` - build the app and open it in Electron.
@@ -98,8 +100,8 @@ If packaging still fails, confirm that the local Nuxt and Electron runtime can s
 - `app/pages/` - application routes for home, connect, settings, and runtime screens.
 - `app/components/` - screen, macro, input, and modal components.
 - `app/stores/` - Pinia state for macros, screens, and settings.
-- `master-server/` - the standalone master server: websocket gateway, state store and file, and static web server.
-- `action-server/` - action implementations that can be triggered by macros, and the code that runs them.
+- `master-server/` - the standalone master server: websocket gateway, state store and file, and static web server; it starts the action server.
+- `action-server/` - the process that connects to the master over websocket and runs macro actions.
 - `electron/` - Electron main and preload entry points. Electron starts the master server if it is not already running.
 - `shared/` - protocol, domain types (`shared/types/`), and platform helpers used by every process.
 

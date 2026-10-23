@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type {
-  Action,
+  ActionCatalog,
+  ActionDescriptor,
   Color,
   Macro,
   MacroScreen,
@@ -14,7 +15,6 @@ import type {
 import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
 import { uuid } from '~/../shared/uuid'
 import { createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
-import { actions as actionList } from '~/../action-server/actions/index'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 
@@ -29,7 +29,18 @@ export const useMacroStore = defineStore('Macro', () => {
   const isApplyingRemoteState = ref(false)
   const isReady = ref(false)
 
-  const actions = ref<Action[]>(actionList)
+  /** One catalog per connected action server, from the master. */
+  const catalogs = ref<Record<string, ActionCatalog>>({})
+
+  // Macros have no node yet, so the first node's actions are the ones offered.
+  const actions = computed<ActionDescriptor[]>(() => {
+    const catalog = Object.values(catalogs.value)[0]
+    return catalog ? catalog.groups.flatMap((group) => group.actions) : []
+  })
+
+  function applyCatalogs(updated: Record<string, ActionCatalog>) {
+    catalogs.value = updated
+  }
 
   const sendFn = ref<((message: ClientToMasterMessage) => void) | null>(null)
 
@@ -43,8 +54,10 @@ export const useMacroStore = defineStore('Macro', () => {
     sendFn.value?.(message)
   }
 
-  function applySnapshot(state: MacroState) {
+  function applySnapshot(state: MacroState, snapshotCatalogs?: Record<string, ActionCatalog>) {
     isApplyingRemoteState.value = true
+
+    catalogs.value = snapshotCatalogs ?? {}
 
     macros.value = state.macros || {}
     screens.value = {}
@@ -301,6 +314,7 @@ export const useMacroStore = defineStore('Macro', () => {
     triggerMacro,
     applySnapshot,
     applyPatch,
+    applyCatalogs,
     setSendFn,
     updateSettings,
   }

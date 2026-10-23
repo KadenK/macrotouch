@@ -17,7 +17,7 @@
 import type { ActionResult, ActionStateMessage, MacroTrigger, RunAction, ViewScreen, WatchActions } from './actions'
 import type { StateCommand } from './commands'
 import type { ProtocolErrorMessage } from './errors'
-import type { ControllerHello, EditorHello, Hello, NodeHello, Snapshot } from './handshake'
+import type { CatalogsMessage, ControllerHello, EditorHello, Hello, NodeHello, Snapshot } from './handshake'
 import type { Quit } from './lifecycle'
 import type { StatePatch } from './sync'
 
@@ -40,7 +40,13 @@ export * from './lifecycle'
 export type ClientToMasterMessage = EditorHello | ControllerHello | StateCommand | MacroTrigger | ViewScreen
 
 /** Master to editor or controller. */
-export type MasterToClientMessage = Snapshot | StatePatch | ActionResult | ActionStateMessage | ProtocolErrorMessage
+export type MasterToClientMessage =
+  | Snapshot
+  | CatalogsMessage
+  | StatePatch
+  | ActionResult
+  | ActionStateMessage
+  | ProtocolErrorMessage
 
 /** Action Server to master. */
 export type NodeToMasterMessage = NodeHello | ActionResult | ActionStateMessage
