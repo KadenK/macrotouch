@@ -431,12 +431,41 @@ await check('PA-01/PA-04/PA-05', 'connect page lists interfaces with URLs and a 
   assert((await cards.count()) > 0, 'no interfaces listed')
   const url = (await cards.first().locator('a.link').innerText()).trim()
   assert(/^http:\/\/\d+\.\d+\.\d+\.\d+:4321\/screen$/.test(url), `URL shape was "${url}"`)
-  console.log(`        (URL is ${url} — checklist PA-04 says "/", MAC-39 changed it to "/screen")`)
+  console.log(`        (URL is ${url} — points straight at the runtime, per PA-04 since MAC-39)`)
   assert((await win.locator('canvas, img[src^="data:image"], svg').count()) > 0, 'no QR rendered for the selected card')
 })
-await check('PA-09', 'local requests reach the editor', async () => {
+// PA-09 as written expects `/` to redirect to `/home`. MAC-39 replaced the
+// IP-based redirect with a chooser page, so the item is tested against the new
+// design: `/` offers the two roles, and both still reach their page.
+await check('PA-09', '/ offers a device choice and both roles are reachable', async () => {
   await goto('/')
-  await until(async () => win.url().endsWith('/home'), `local / landed on ${win.url()} instead of /home`)
+  const choices = win.locator('.choose-page .choice')
+  assert((await choices.count()) === 2, `expected Editor and Controller links, found ${await choices.count()}`)
+  const labels = await choices.allInnerTexts()
+  assert(labels.join(',') === 'Editor,Controller', `links were ${JSON.stringify(labels)}`)
+  await choices.first().click()
+  await until(async () => win.url().endsWith('/home'), `Editor landed on ${win.url()}`)
+  await goto('/')
+  await win.locator('.choose-page .choice').nth(1).click()
+  await until(async () => win.url().endsWith('/screen'), `Controller landed on ${win.url()}`)
+})
+
+// PA-08 under the post-MAC-39 design: a device is routed by the URL it was
+// handed, not by a server-side IP check. What matters is that the URL the
+// connect page advertises lands a phone on the runtime. Every route is now
+// served to every client; that is logged so a change back to redirects shows
+// up as a diff rather than passing silently.
+await check('PA-08', 'the advertised pairing URL lands a remote device on the runtime', async () => {
+  const lan = (await (await fetch(`${BASE}/api/ip`)).json())[0]
+  assert(lan, 'no LAN interface to test against')
+  const screen = await fetch(`http://${lan.ip}:4321/screen`, { redirect: 'manual' })
+  assert(screen.status === 200, `the advertised /screen URL returned ${screen.status} to a LAN client`)
+  const served = []
+  for (const route of ['/', '/home', '/settings', '/connect']) {
+    const res = await fetch(`http://${lan.ip}:4321${route}`, { redirect: 'manual' })
+    served.push(`${route} ${res.status}`)
+  }
+  console.log(`        (no server-side role routing since MAC-39: ${served.join(', ')})`)
 })
 
 sec('F. Runtime screen (RT)')
