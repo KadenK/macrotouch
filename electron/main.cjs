@@ -205,12 +205,6 @@ app.whenReady().then(async () => {
 
   createWindow()
 
-  // IPC handlers
-  ipcMain.on('macro:trigger', (event, macroId) => {
-    console.log(`Macro triggered: ${macroId}`)
-    // TODO: Implement actual macro execution (e.g., simulate keystrokes)
-  })
-
   app.on('activate', () => {
     // On macOS, re-create the window when the dock icon is clicked
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -218,6 +212,7 @@ app.whenReady().then(async () => {
     }
   })
 
+  // The only IPC left: the renderer talks to the master over the websocket.
   ipcMain.handle('dialog:selectExecutable', async () => {
     const platform = process.platform
     let defaultPath = undefined
