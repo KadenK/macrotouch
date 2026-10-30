@@ -310,7 +310,7 @@ app.whenReady().then(async () => {
 
   createWindow()
 
-  // IPC handlers
+  // IPC handlers. Everything else goes to the master over the websocket.
   ipcMain.handle('settings:getDesktop', () => desktopSettings)
   ipcMain.handle('settings:updateDesktop', (_event, patch) => {
     const allowed = Object.keys(DESKTOP_SETTINGS_DEFAULTS)
@@ -318,11 +318,6 @@ app.whenReady().then(async () => {
       Object.entries(patch ?? {}).filter(([key, value]) => allowed.includes(key) && typeof value === 'boolean'),
     )
     return updateDesktopSettings(clean)
-  })
-
-  ipcMain.on('macro:trigger', (event, macroId) => {
-    console.log(`Macro triggered: ${macroId}`)
-    // TODO: Implement actual macro execution (e.g., simulate keystrokes)
   })
 
   app.on('activate', () => {

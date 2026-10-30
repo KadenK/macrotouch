@@ -15,8 +15,8 @@
   },
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\"",
-    "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 tsx watch master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
+    "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch master-server/index.ts\"",
+    "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
     "build": "npm run generate && npm run build:master && npm run build:action",
     "generate": "nuxt generate",
     "preview": "npm run start:master",
@@ -26,6 +26,7 @@
     "dist:wine": "npm run build && cross-env NODE_ENV=production electron-builder --win nsis --x64",
     "docs": "likec4 start docs/architecture",
     "test:protocol": "node scripts/protocol-check.mjs",
+    "test:ui": "node scripts/ui-check.mjs",
     "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws",
     "build:action": "esbuild action-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-action/index.mjs --external:ws --external:node-notifier",
     "start:master": "node dist-master/index.mjs",
@@ -33,6 +34,10 @@
     "typecheck:protocol": "tsc -p tsconfig.protocol.json"
   },
   "dependencies": {
+    "node-notifier": "^10.0.1",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
     "@iconify-json/codicon": "^1.2.51",
     "@iconify-json/file-icons": "^1.2.2",
     "@iconify-json/game-icons": "^1.2.3",
@@ -40,17 +45,9 @@
     "@iconify-json/material-symbols": "^1.2.66",
     "@iconify-json/simple-icons": "^1.2.77",
     "@iconify/utils": "^3.1.0",
+    "@nuxt/eslint": "^1.15.1",
     "@nuxt/icon": "^2.2.1",
     "@pinia/nuxt": "^0.11.3",
-    "node-notifier": "^10.0.1",
-    "nuxt": "^4.3.1",
-    "qrcode": "^1.5.4",
-    "vue": "^3.5.28",
-    "vue-router": "^4.6.4",
-    "ws": "^8.19.0"
-  },
-  "devDependencies": {
-    "@nuxt/eslint": "^1.15.1",
     "@types/node-notifier": "^8.0.5",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.1",
@@ -63,8 +60,12 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "likec4": "^1.59.4",
+    "nuxt": "^4.3.1",
     "postcss-nested": "^7.0.2",
+    "qrcode": "^1.5.4",
     "tsx": "^4.23.15",
+    "vue": "^3.5.28",
+    "vue-router": "^4.6.4",
     "wait-on": "^9.0.4"
   },
   "build": {
