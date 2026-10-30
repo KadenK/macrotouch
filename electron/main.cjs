@@ -25,9 +25,6 @@ let mainWindow = null
 let tray = null
 let trayStatus = null
 let trayRefreshTimer = null
-// Set once the app is quitting, so closing the window is no longer turned into a minimize.
-let appQuitting = false
-
 // Settings for this desktop app only, so unlike the master's they are known before
 // the master starts and do not sync to other devices.
 const DESKTOP_SETTINGS_DEFAULTS = { trayEnabled: true, minimizeOnClose: true }
@@ -222,13 +219,6 @@ function createWindow(route = '/home') {
     return { action: 'allow' }
   })
 
-  mainWindow.on('close', (event) => {
-    // Without a tray there would be no way back to the window or to quit.
-    if (appQuitting || !tray || !desktopSettings.minimizeOnClose) return
-    event.preventDefault()
-    mainWindow.hide()
-  })
-
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -373,8 +363,10 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  // On macOS, keep the app running until Command+Q
-  if (process.platform !== 'darwin') {
+  // The window is destroyed rather than hidden, so in the background only this
+  // process (with its tray) and the servers keep running. Without a tray there
+  // would be no way back to the window or to quit. macOS keeps running anyway.
+  if (process.platform !== 'darwin' && !(tray && desktopSettings.minimizeOnClose)) {
     app.quit()
   }
 })
@@ -385,7 +377,6 @@ app.on('will-quit', () => {
 })
 
 app.on('before-quit', (event) => {
-  appQuitting = true
   if (quitting || !masterProcess) return
   // Hold the quit until the master has been asked to stop.
   event.preventDefault()
