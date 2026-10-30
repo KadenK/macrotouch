@@ -1,6 +1,6 @@
 'use strict'
 
-const { app, BrowserWindow, shell, ipcMain, screen, nativeImage, dialog } = require('electron')
+const { app, BrowserWindow, shell, ipcMain, screen, nativeImage, dialog, Tray, Menu } = require('electron')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const http = require('http')
@@ -14,22 +14,46 @@ if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore()
-      }
-      mainWindow.focus()
-      return
-    }
-
     if (app.isReady()) {
-      createWindow()
+      showWindow()
     }
   })
 }
 
-// Keep a global reference to prevent garbage collection
+// Keep global references to prevent garbage collection
 let mainWindow = null
+let tray = null
+let trayStatus = null
+let trayRefreshTimer = null
+// Set once the app is quitting, so closing the window is no longer turned into a minimize.
+let appQuitting = false
+
+// Settings for this desktop app only, so unlike the master's they are known before
+// the master starts and do not sync to other devices.
+const DESKTOP_SETTINGS_DEFAULTS = { trayEnabled: true, minimizeOnClose: true }
+const desktopSettingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
+let desktopSettings = { ...DESKTOP_SETTINGS_DEFAULTS }
+
+function loadDesktopSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(desktopSettingsPath(), 'utf8'))
+    desktopSettings = { ...DESKTOP_SETTINGS_DEFAULTS, ...saved }
+  } catch {
+    // Missing or unreadable; keep the defaults.
+  }
+}
+
+function updateDesktopSettings(patch) {
+  desktopSettings = { ...desktopSettings, ...patch }
+  try {
+    fs.writeFileSync(desktopSettingsPath(), JSON.stringify(desktopSettings, null, 2))
+  } catch (err) {
+    console.error('Failed to save desktop settings:', err)
+  }
+  if (desktopSettings.trayEnabled) createTray()
+  else destroyTray()
+  return desktopSettings
+}
 
 // Where the master server lives. Mirrors DEFAULT_MASTER in shared/websocket.ts
 // (this file cannot import TypeScript); change both together. Pointing the app at
@@ -138,7 +162,24 @@ function stopMaster() {
   })
 }
 
-function createWindow() {
+function appUrl(route) {
+  const base = isDevelopmentMode() ? process.env.NUXT_DEV_URL || 'http://127.0.0.1:4321' : MASTER_URL
+  return `${base}${route}`
+}
+
+/** Brings the window to the front on the given route, creating it if needed. */
+function showWindow(route) {
+  if (!mainWindow) {
+    createWindow(route)
+    return
+  }
+  if (route) mainWindow.loadURL(appUrl(route))
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function createWindow(route = '/home') {
   // Calculate window size relative to screen size
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
@@ -166,12 +207,10 @@ function createWindow() {
   const isDev = isDevelopmentMode()
   console.log('Electron startup mode:', { isDev, NODE_ENV: process.env.NODE_ENV, isPackaged: app.isPackaged })
 
+  // In development this is the Nuxt dev server
+  mainWindow.loadURL(appUrl(route))
   if (isDev) {
-    // In development, load from the Nuxt dev server
-    mainWindow.loadURL(`${process.env.NUXT_DEV_URL || 'http://127.0.0.1:4321'}/home`)
     mainWindow.webContents.openDevTools()
-  } else {
-    mainWindow.loadURL(`${MASTER_URL}/home`)
   }
 
   // Open external links in the default browser instead of Electron
@@ -183,9 +222,80 @@ function createWindow() {
     return { action: 'allow' }
   })
 
+  mainWindow.on('close', (event) => {
+    // Without a tray there would be no way back to the window or to quit.
+    if (appQuitting || !tray || !desktopSettings.minimizeOnClose) return
+    event.preventDefault()
+    mainWindow.hide()
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+/** The disabled first line of the tray menu. */
+async function readMasterStatus() {
+  return new Promise((resolve) => {
+    const req = http.get({ host: MASTER.host, port: MASTER.httpPort, path: '/api/ip', timeout: 1000 }, (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (chunk) => (body += chunk))
+      res.on('end', () => {
+        if (res.statusCode !== 200) return resolve('Server not running')
+        try {
+          const [primary] = JSON.parse(body)
+          resolve(primary ? `Running at ${primary.ip}:${MASTER.httpPort}` : 'Running (no network found)')
+        } catch {
+          resolve('Running')
+        }
+      })
+    })
+    req.on('timeout', () => req.destroy())
+    req.on('error', () => resolve('Server not running'))
+  })
+}
+
+function setTrayMenu(status) {
+  // Linux only picks up label changes when the whole menu is set again, so rebuild
+  // only when the status changes to avoid flicker while the menu is open.
+  if (!tray || status === trayStatus) return
+  trayStatus = status
+  tray.setToolTip(`MacroTouch: ${status}`)
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: status, enabled: false },
+      { type: 'separator' },
+      { label: 'Open Editor', click: () => showWindow('/home') },
+      { label: 'Connect a Device', click: () => showWindow('/connect') },
+      { type: 'separator' },
+      { label: 'Quit MacroTouch', click: () => app.quit() },
+    ]),
+  )
+}
+
+function createTray() {
+  if (tray) return
+  // Tray icons are drawn small; Linux panels are a bit larger than the others.
+  const size = process.platform === 'linux' ? 22 : 16
+  tray = new Tray(appIcon.resize({ width: size, height: size }))
+  setTrayMenu('Starting…')
+
+  // macOS and Linux open the menu on click; Windows only does on right-click.
+  if (process.platform === 'win32') {
+    tray.on('click', () => tray.popUpContextMenu())
+  }
+
+  readMasterStatus().then(setTrayMenu)
+  trayRefreshTimer = setInterval(() => readMasterStatus().then(setTrayMenu), 5000)
+  trayRefreshTimer.unref()
+}
+
+function destroyTray() {
+  clearInterval(trayRefreshTimer)
+  tray?.destroy()
+  tray = null
+  trayStatus = null
 }
 
 app.whenReady().then(async () => {
@@ -197,25 +307,37 @@ app.whenReady().then(async () => {
     app.dock.setIcon(appIcon)
   }
 
+  loadDesktopSettings()
+  // Before the master starts, so the tray still shows when it fails to.
+  if (desktopSettings.trayEnabled) createTray()
+
   try {
     await ensureMaster()
   } catch (err) {
     console.error('Failed to start master server:', err)
   }
+  readMasterStatus().then(setTrayMenu)
 
   createWindow()
 
   // IPC handlers
+  ipcMain.handle('settings:getDesktop', () => desktopSettings)
+  ipcMain.handle('settings:updateDesktop', (_event, patch) => {
+    const allowed = Object.keys(DESKTOP_SETTINGS_DEFAULTS)
+    const clean = Object.fromEntries(
+      Object.entries(patch ?? {}).filter(([key, value]) => allowed.includes(key) && typeof value === 'boolean'),
+    )
+    return updateDesktopSettings(clean)
+  })
+
   ipcMain.on('macro:trigger', (event, macroId) => {
     console.log(`Macro triggered: ${macroId}`)
     // TODO: Implement actual macro execution (e.g., simulate keystrokes)
   })
 
   app.on('activate', () => {
-    // On macOS, re-create the window when the dock icon is clicked
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    // On macOS, show or re-create the window when the dock icon is clicked
+    showWindow()
   })
 
   ipcMain.handle('dialog:selectExecutable', async () => {
@@ -257,7 +379,13 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('will-quit', () => {
+  // Windows can leave a ghost icon behind otherwise.
+  destroyTray()
+})
+
 app.on('before-quit', (event) => {
+  appQuitting = true
   if (quitting || !masterProcess) return
   // Hold the quit until the master has been asked to stop.
   event.preventDefault()

@@ -22,4 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectExecutable: async () => {
     return ipcRenderer.invoke('dialog:selectExecutable')
   },
+  // Settings for the desktop app itself (tray icon, close behaviour)
+  getDesktopSettings: () => ipcRenderer.invoke('settings:getDesktop'),
+  updateDesktopSettings: (patch) => ipcRenderer.invoke('settings:updateDesktop', patch),
 })
