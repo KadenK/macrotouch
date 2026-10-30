@@ -14,13 +14,26 @@
         </label>
       </div>
 
-      <div class="setting-row">
-        <span>Minimize on close</span>
-        <label class="switch">
-          <input type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
+      <template v-if="desktopForm">
+        <div class="setting-row">
+          <span>Show tray icon</span>
+          <label class="switch">
+            <input v-model="desktopForm.trayEnabled" type="checkbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row" :class="{ 'is-disabled': !desktopForm.trayEnabled }">
+          <span>
+            Minimize on close
+            <small v-if="!desktopForm.trayEnabled" class="hint">"Show tray icon" must be enabled</small>
+          </span>
+          <label class="switch">
+            <input v-model="desktopForm.minimizeOnClose" type="checkbox" :disabled="!desktopForm.trayEnabled" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </template>
     </section>
 
     <!-- Device -->
@@ -98,7 +111,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import { colorFromHex, colorToHex } from '~/../shared/types'
@@ -120,6 +133,24 @@ function buildForm() {
 
 const form = ref(buildForm())
 
+// Settings for the desktop app itself; only present when running inside Electron.
+type DesktopSettings = { trayEnabled: boolean; minimizeOnClose: boolean }
+type DesktopSettingsAPI = {
+  getDesktopSettings: () => Promise<DesktopSettings>
+  updateDesktopSettings: (patch: Partial<DesktopSettings>) => Promise<DesktopSettings>
+}
+const electronAPI = import.meta.client
+  ? (window as unknown as { electronAPI?: DesktopSettingsAPI }).electronAPI
+  : undefined
+let savedDesktopSettings: DesktopSettings | null = null
+const desktopForm = ref<DesktopSettings | null>(null)
+
+onMounted(async () => {
+  if (!electronAPI?.getDesktopSettings) return
+  savedDesktopSettings = await electronAPI.getDesktopSettings()
+  desktopForm.value = { ...savedDesktopSettings }
+})
+
 watch(
   settings,
   () => {
@@ -138,11 +169,13 @@ function save() {
     swipeToChangeScreens: form.value.swipeToChangeScreens,
     attemptFullscreen: form.value.attemptFullscreen,
   })
+  if (desktopForm.value) electronAPI?.updateDesktopSettings({ ...desktopForm.value })
   router.push('/home')
 }
 
 function cancel() {
   form.value = buildForm()
+  if (savedDesktopSettings) desktopForm.value = { ...savedDesktopSettings }
 }
 </script>
 
@@ -189,6 +222,16 @@ function cancel() {
   align-items: center;
   margin: var(--space-3) 0;
   color: var(--color-ink-2);
+
+  &.is-disabled {
+    opacity: 0.55;
+  }
+}
+
+.hint {
+  display: block;
+  font-size: 0.8rem;
+  color: #6b7280;
 }
 
 select {
