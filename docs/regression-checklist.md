@@ -208,7 +208,9 @@ found.` rather than an error or an empty list.
 **PA-03 — API failure.** If the interface lookup fails, the page shows `Could not detect local
 network interfaces.`
 
-**PA-04 — URL shape.** Each listed URL is `http://<interface ip>:<port of the current page>/`.
+**PA-04 — URL shape.** Each listed URL is `http://<interface ip>:<port of the current page>/screen`.
+~~Each listed URL is `http://<interface ip>:<port of the current page>/`.~~ Changed by [MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change): with
+the redirect gone, the connect page points phones straight at the runtime.
 
 **PA-05 — QR code for the selected interface.** The selected card renders a QR code; others don't.
 Clicking a different card moves the QR to it.
@@ -218,12 +220,21 @@ phone lands on the runtime screen showing the current layout.
 
 **PA-07 — Pair by scanning the QR.** Scan the QR code with the phone camera. Same result as PA-06.
 
-**PA-08 — Remote clients are forced to the runtime.** From the phone, request `/`, `/home`,
-`/settings` and `/connect`. All redirect (302) to `/screen`. The editor and settings are not
-reachable from a remote device.
+**PA-08 — Remote clients land on the runtime.** The URL and QR the connect page advertises point
+at `/screen`, so a phone that types or scans them lands on the runtime.
+~~From the phone, request `/`, `/home`, `/settings` and `/connect`. All redirect (302) to
+`/screen`. The editor and settings are not reachable from a remote device.~~ Changed by
+[MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change):
+`server/middleware/ipRedirect.ts` was removed and role routing moved to the URL the client is
+given, rather than a server-side check of its IP. The master now serves every route to every
+client, so a remote device that navigates to `/home` or `/settings` by hand does reach the editor.
+Recorded here as the current contract — see
+[`baseline-runs/2026-10-22-mac-42.md`](baseline-runs/2026-10-22-mac-42.md).
 
-**PA-09 — Local requests reach the editor.** On the host, `/` redirects to `/home` and `/settings`
-and `/connect` load normally.
+**PA-09 — Local requests reach the editor.** On the host, `/settings` and `/connect` load
+normally. ~~`/` redirects to `/home`.~~ Changed by [MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change): the IP-based redirect was replaced with a
+chooser page at `/` ("What is this device?") offering **Editor** and **Controller**. Both links
+still reach their page.
 
 **PA-10 — Phone reflects live edits.** With the phone connected, add a macro on the host. It appears
 on the phone without a reload.

@@ -1,7 +1,22 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline'
+
+/**
+ * Which action server to run. `MACROTOUCH_ACTION_ENTRY` wins, and the dev
+ * scripts set it to the TypeScript source: without it a `dist-action` bundle
+ * left behind by an earlier `npm run build` shadows the source, and edits to
+ * `action-server/` silently stop taking effect in dev.
+ */
+function resolveEntry(): string {
+  const override = process.env.MACROTOUCH_ACTION_ENTRY
+  if (override) return path.resolve(override)
+  const bundle = fileURLToPath(new URL('../dist-action/index.mjs', import.meta.url))
+  if (existsSync(bundle)) return bundle
+  return fileURLToPath(new URL('../action-server/index.ts', import.meta.url))
+}
 
 const MIN_DELAY_MS = 1000
 const MAX_DELAY_MS = 10000
@@ -26,9 +41,8 @@ export function createActionServerLauncher({ masterUrl }: { masterUrl: string })
   }
 
   const spawnChild = () => {
-    const bundle = fileURLToPath(new URL('../dist-action/index.mjs', import.meta.url))
-    const entry = existsSync(bundle) ? bundle : fileURLToPath(new URL('../action-server/index.ts', import.meta.url))
-    const args = entry === bundle ? [entry] : ['--import', 'tsx', entry]
+    const entry = resolveEntry()
+    const args = entry.endsWith('.ts') ? ['--import', 'tsx', entry] : [entry]
     const startedAt = Date.now()
     const processChild = spawn(process.execPath, args, {
       env: { ...process.env, MACROTOUCH_MASTER_URL: masterUrl },
