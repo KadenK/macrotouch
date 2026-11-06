@@ -161,7 +161,7 @@ function onFocusOut(event: FocusEvent) {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-ink);
   text-align: left;
@@ -171,7 +171,7 @@ function onFocusOut(event: FocusEvent) {
     box-shadow var(--duration-fast) var(--ease-out);
 
   &:hover {
-    border-color: #cbd5e1;
+    background: var(--color-hover);
   }
 
   &:focus-visible,
@@ -212,7 +212,7 @@ function onFocusOut(event: FocusEvent) {
   max-height: 14rem;
   overflow-y: auto;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 

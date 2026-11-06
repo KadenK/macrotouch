@@ -101,15 +101,16 @@ onMounted(() => {
   gap: 0.25rem;
   padding: 0.5rem;
   margin: 0;
-  border: 1px solid #e5e7eb;
+  border: var(--border-width) solid var(--color-border);
   border-radius: 4px;
-  background: white;
+  background: var(--color-surface);
+  color: var(--color-text-label);
   cursor: pointer;
   transition: background-color 0.1s ease, border-color 0.1s ease;
 
   &:hover {
-    border-color: #3b82f6;
-    background: #f0f9ff;
+    border-color: var(--color-primary);
+    background: var(--color-primary-50);
   }
 
 }
@@ -121,12 +122,12 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #374151;
+  color: var(--color-text-label);
 }
 
 .icon-name {
   font-size: 0.65rem;
-  color: #6b7280;
+  color: var(--color-text-subtle);
   text-align: center;
   word-break: break-word;
   overflow: hidden;
@@ -149,7 +150,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: #9ca3af;
+  color: var(--color-text-faint);
   font-size: 0.875rem;
 }
 </style>

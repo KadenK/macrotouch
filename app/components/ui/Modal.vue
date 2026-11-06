@@ -70,7 +70,7 @@ const close = () => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -79,7 +79,8 @@ const close = () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -106,7 +107,7 @@ const close = () => {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -114,7 +115,7 @@ const close = () => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-strong);
 }
 
 .modal-actions {
@@ -128,7 +129,7 @@ const close = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--color-text-subtle);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -138,13 +139,13 @@ const close = () => {
   transition: color 0.2s ease;
 
   &:hover {
-    color: #111827;
+    color: var(--color-text-strong);
   }
 }
 
 .modal-search {
   flex-shrink: 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .modal-body {
@@ -155,7 +156,7 @@ const close = () => {
 
 .modal-footer {
   flex-shrink: 0;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   padding: 1rem 1.5rem;
 }
 </style>

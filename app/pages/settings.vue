@@ -7,6 +7,14 @@
       <h2>General</h2>
 
       <div class="setting-row">
+        <span>Dark mode</span>
+        <label class="switch">
+          <input type="checkbox" :checked="isDark" @change="toggleTheme" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-row">
         <span>Start on boot</span>
         <label class="switch">
           <input type="checkbox" />
@@ -116,6 +124,10 @@ import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import { colorFromHex, colorToHex } from '~/../shared/types'
 import { useRouter } from 'vue-router'
+import { useTheme } from '~/composables/useTheme'
+
+// Applies immediately and is remembered; it is not part of the Save/Cancel form.
+const { isDark, toggle: toggleTheme } = useTheme()
 
 const store = useMacroStore()
 const { settings } = storeToRefs(store)
@@ -199,7 +211,7 @@ function cancel() {
   margin-bottom: var(--space-3);
   padding: var(--space-5);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   background: var(--color-surface);
 }
 
@@ -232,14 +244,15 @@ function cancel() {
 .hint {
   display: block;
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--color-text-subtle);
 }
 
 select {
+  color: var(--color-ink);
   appearance: none;
   padding: 0.45rem 2.25rem 0.45rem 0.75rem;
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border-strong);
   background: var(--color-surface)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
     no-repeat;
@@ -273,7 +286,7 @@ select {
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background: #e2e8f0;
+  background: var(--color-border-strong);
   transition: 0.25s;
   border-radius: 24px;
 }

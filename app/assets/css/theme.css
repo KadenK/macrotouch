@@ -14,6 +14,25 @@
   --color-border: #e2e8f0;
   --color-surface: #ffffff;
   --color-canvas: #f8fafc;
+  --color-border-strong: #cbd5e1;
+  --color-hover: #f1f5f9;
+  --color-input-bg: #ffffff;
+  --color-input-border: #d1d5db;
+  --color-text-strong: #111827;
+  --color-text-label: #374151;
+  --color-text-subtle: #6b7280;
+  --color-text-faint: #9ca3af;
+  --color-neutral: #e5e7eb;
+  --color-cell: #cfcfcf;
+  --color-cell-hover: #bdbdbd;
+  --color-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Fallback hooks read by the input components */
+  --v-border-color: #ccc;
+  --v-btn-background: #f7f7f7;
+  --v-btn-background-hover: #ececec;
+  --v-bg-input: #fff;
+  --v-text-muted: #555;
 
   /* State */
   --color-danger: #dc2626;
@@ -54,6 +73,46 @@
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-fast: 160ms;
+
+  --border-width: 1px;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --color-primary: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-50: rgba(59, 130, 246, 0.16);
+
+  --color-ink: #ededed;
+  --color-ink-2: #d4d4d4;
+  --color-muted: #a3a3a3;
+  --color-border: #383838;
+  --color-surface: #1a1a1a;
+  --color-canvas: #0e0e0e;
+  --color-border-strong: #4e4e4e;
+  --color-hover: #2a2a2a;
+  --color-input-bg: #0e0e0e;
+  --color-input-border: #4e4e4e;
+  --color-text-strong: #fafafa;
+  --color-text-label: #d4d4d4;
+  --color-text-subtle: #a3a3a3;
+  --color-text-faint: #737373;
+  --color-neutral: #333333;
+  --color-cell: #2e2e2e;
+  --color-cell-hover: #3b3b3b;
+  --color-overlay: rgba(0, 0, 0, 0.7);
+
+  --v-border-color: #4e4e4e;
+  --v-btn-background: #2a2a2a;
+  --v-btn-background-hover: #363636;
+  --v-bg-input: #0e0e0e;
+  --v-text-muted: #a3a3a3;
+
+  --border-width: 2px;
+  --shadow-sm: none;
+
+  color-scheme: dark;
 }
 
 body {
@@ -127,7 +186,7 @@ p {
   justify-content: center;
   gap: var(--space-2);
   padding: 0.5rem 1rem;
-  border: 1px solid transparent;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-pill);
   font-size: var(--text-sm);
   font-weight: 500;
@@ -172,13 +231,13 @@ p {
 .btn-secondary,
 .cancel-btn {
   background: var(--color-surface);
-  border-color: #cbd5e1;
+  border-color: var(--color-border-strong);
   color: var(--color-ink);
 }
 
 .btn-secondary:hover:not(:disabled),
 .cancel-btn:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--color-hover);
 }
 
 /* Destructive */
@@ -193,7 +252,7 @@ p {
 
 .card {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   box-shadow: var(--shadow-sm);
@@ -229,16 +288,16 @@ p {
 .form-group > label {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #374151;
+  color: var(--color-text-label);
 }
 
 .text-input {
   padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
+  border: var(--border-width) solid var(--color-input-border);
   border-radius: 4px;
   font-size: 0.95rem;
-  color: #111827;
-  background: white;
+  color: var(--color-text-strong);
+  background: var(--color-input-bg);
 }
 
 .text-input:focus {
@@ -266,13 +325,13 @@ p {
 
 .sub-label {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--color-text-subtle);
   font-weight: 500;
 }
 
 .grid-divider {
   font-size: 1.25rem;
-  color: #9ca3af;
+  color: var(--color-text-faint);
   padding-bottom: 0.4rem;
 }
 

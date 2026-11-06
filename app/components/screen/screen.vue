@@ -103,6 +103,6 @@ function getPositionFromIndex(index: number): Position {
 .no-screen {
   padding: 1rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-subtle);
 }
 </style>

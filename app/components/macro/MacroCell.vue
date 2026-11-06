@@ -130,7 +130,7 @@ function handleTrigger() {
 
   &.edit {
     border: none;
-    background-color: #cfcfcf;
+    background-color: var(--color-cell);
     cursor: pointer;
     transition: background-color 0.1s ease;
 
@@ -140,7 +140,7 @@ function handleTrigger() {
     }
 
     &:hover {
-      background-color: #bdbdbd;
+      background-color: var(--color-cell-hover);
     }
   }
 }
@@ -156,7 +156,7 @@ function handleTrigger() {
   &.placeholder {
     aspect-ratio: 1/1;
     min-width: 50px;
-    background-color: #cfcfcf;
+    background-color: var(--color-cell);
   }
 
   .placeholder-icon {

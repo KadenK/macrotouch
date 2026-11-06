@@ -145,14 +145,14 @@ const openExecutablePicker = async () => {
 .input-field {
   flex: 1;
   padding: 0.5rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
 }
 
 .browse-button {
   flex-shrink: 0;
   padding: 0.5rem 0.9rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
   background: var(--v-btn-background, #f7f7f7);
   cursor: pointer;

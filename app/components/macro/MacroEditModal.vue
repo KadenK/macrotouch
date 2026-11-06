@@ -249,7 +249,7 @@ function deleteMacro() {
 .icon-preview {
   width: 64px;
   height: 64px;
-  border: 1px solid #d1d5db;
+  border: var(--border-width) solid var(--color-input-border);
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -265,7 +265,7 @@ function deleteMacro() {
 
 .preview-placeholder {
   font-size: 24px;
-  color: #9ca3af;
+  color: var(--color-text-faint);
 }
 
 .icon-row {
@@ -284,7 +284,8 @@ function deleteMacro() {
   padding: 0.5rem;
   width: 96px;
   height: 32px;
-  background-color: #e5e7eb;
+  background-color: var(--color-neutral);
+  color: var(--color-text-strong);
   border: none;
   border-radius: 4px;
   cursor: pointer;

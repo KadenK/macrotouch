@@ -38,14 +38,16 @@ onMounted(async () => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .search-input {
   flex: 1;
   padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
+  border: var(--border-width) solid var(--color-input-border);
   border-radius: 4px;
+  background: var(--color-input-bg);
+  color: var(--color-text-strong);
   font-size: 0.875rem;
 
   &:focus {
@@ -57,7 +59,7 @@ onMounted(async () => {
 
 .result-count {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--color-text-subtle);
   white-space: nowrap;
 }
 </style>

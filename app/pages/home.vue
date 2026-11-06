@@ -143,7 +143,7 @@ function onScreenDeleted() {
   padding: var(--space-4);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   box-shadow: var(--shadow-sm);
 }
 

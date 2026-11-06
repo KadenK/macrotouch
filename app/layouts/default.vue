@@ -42,7 +42,7 @@
   font-size: clamp(1.8rem, 2.6vw, 2.8rem);
   letter-spacing: -0.02em;
   font-weight: 700;
-  color: #1d4ed8;
+  color: var(--color-primary);
   cursor: pointer;
   margin-left: var(--space-1);
 }

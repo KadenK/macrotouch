@@ -4,4 +4,8 @@
   </NuxtLayout>
 </template>
 
-<style lang="postcss" scoped></style>
+<script lang="ts" setup>
+import { useTheme } from '~/composables/useTheme'
+
+useTheme().init()
+</script>
