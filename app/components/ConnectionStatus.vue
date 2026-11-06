@@ -22,10 +22,15 @@ import { useWebSocket } from '~/composables/useWebSocket'
  * Nothing is shown while connected, or during the first connect — a banner on
  * every page load would be noise. It appears once a retry is pending, which is
  * the first moment the displayed state can actually be stale.
+ *
+ * A refused pairing token is left out: NotPaired already covers the screen with
+ * the reason and what to do about it, and a banner underneath would say the
+ * same thing twice.
  */
 const { status, fatalError } = useWebSocket()
 
 const message = computed(() => {
+  if (fatalError.value?.code === 'invalid-token') return ''
   if (status.value === 'offline') {
     return fatalError.value ? `Disconnected: ${fatalError.value.message}` : 'Disconnected from MacroTouch.'
   }
