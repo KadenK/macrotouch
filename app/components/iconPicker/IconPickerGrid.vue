@@ -105,17 +105,13 @@ onMounted(() => {
   border-radius: 4px;
   background: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
 
   &:hover {
     border-color: #3b82f6;
     background: #f0f9ff;
-    transform: scale(1.05);
   }
 
-  &:active {
-    transform: scale(0.95);
-  }
 }
 
 .icon-svg {

@@ -7,11 +7,7 @@
           <button v-if="currentScreenId" class="btn btn-secondary" @click="openEditModal">Edit Current Screen</button>
         </div>
 
-        <select v-if="screenList.length" v-model="currentScreenId" class="screen-select">
-          <option v-for="screen in screenList" :key="screen.id" :value="screen.id">
-            {{ screen.name }}
-          </option>
-        </select>
+        <SelectMenu v-if="screenList.length" v-model="currentScreenId" :options="screenOptions" class="screen-select" />
       </div>
 
       <div class="macro-surface">
@@ -26,7 +22,11 @@
       :pending-screen="pendingNewScreen"
       @saved="onScreenSaved"
       @deleted="onScreenDeleted"
-      @update:model-value="(v) => { if (!v) pendingNewScreen = null }"
+      @update:model-value="
+        (v) => {
+          if (!v) pendingNewScreen = null
+        }
+      "
     />
   </div>
 </template>
@@ -38,6 +38,7 @@ import { useMacroStore } from '~/stores/macro'
 import MacroGridScreen from '../components/screen/screen.vue'
 import { createMacroScreen, createColor } from '~/../shared/types'
 import ScreenEditModal from '~/components/screen/ScreenEditModal.vue'
+import SelectMenu from '~/components/ui/SelectMenu.vue'
 
 const store = useMacroStore()
 const { settings } = storeToRefs(store)
@@ -47,6 +48,7 @@ const currentScreenId = ref<string>('')
 const pendingNewScreen = ref<ReturnType<typeof createMacroScreen> | null>(null)
 
 const screenList = computed(() => store.getScreenList())
+const screenOptions = computed(() => screenList.value.map((s) => ({ value: s.id, label: s.name })))
 
 function openEditModal() {
   if (currentScreenId.value) {
@@ -127,19 +129,7 @@ function onScreenDeleted() {
 }
 
 .screen-select {
-  appearance: none;
-  width: 100%;
-  max-width: 16rem;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat;
-  background-position: right 1rem center;
-  background-size: 1.1rem 1.1rem;
   margin-bottom: var(--space-3);
-  padding-right: 3rem;
 }
 
 .empty-state {

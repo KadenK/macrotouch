@@ -1,7 +1,15 @@
 <template>
   <Teleport to="body">
     <div v-if="isOpen" class="modal-overlay" @pointerdown.self="close">
-      <div :class="['modal-container', { 'modal-container--fixed': fixedSize }]">
+      <div
+        :class="[
+          'modal-container',
+          {
+            'modal-container--fixed': fixedSize,
+            'modal-container--wide': wide,
+          },
+        ]"
+      >
         <div class="modal-header">
           <h2 class="modal-title">{{ title }}</h2>
           <div class="modal-actions">
@@ -34,12 +42,14 @@ interface Props {
   showClose?: boolean
   showBack?: boolean
   fixedSize?: boolean
+  wide?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showClose: true,
   showBack: false,
   fixedSize: false,
+  wide: false,
 })
 
 const emit = defineEmits<{
@@ -76,7 +86,7 @@ const close = () => {
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .modal-container--fixed {
@@ -84,6 +94,11 @@ const close = () => {
   height: 80vh;
   max-width: none;
   max-height: none;
+}
+
+.modal-container--wide {
+  max-width: 880px;
+  max-height: calc(100vh - 2rem);
 }
 
 .modal-header {

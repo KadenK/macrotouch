@@ -1,61 +1,69 @@
 <template>
-  <Modal v-model="isOpen" :title="modalTitle" :fixed-size="true">
+  <Modal v-model="isOpen" :title="modalTitle" :wide="true">
     <div class="edit-form">
-      <div class="form-group">
-        <label>Name</label>
-        <input v-model="editForm.name" type="text" placeholder="Macro name" />
-      </div>
-
-      <div class="form-group">
-        <label>Action</label>
-        <select v-model="selectedActionId">
-          <option value="">(None)</option>
-          <option v-for="action in store.actions" :key="action.actionId" :value="action.actionId">
-            {{ action.label }}
-          </option>
-        </select>
-      </div>
-
-      <ActionFields
-        v-if="selectedActionFields.length > 0"
-        v-model="actionParameters"
-        :action-fields="selectedActionFields"
-      />
-
-      <div class="form-group">
-        <label>Icon</label>
-        <div class="icon-row">
-          <div class="icon-preview" :style="{ background: iconPreviewBg }" @click="openIconPicker">
-            <Icon
-              v-if="editForm.icon.source === 'LIBRARY'"
-              :name="normalizeIconValue(editForm.icon.value)"
-              class="preview-icon"
-              :style="{ color: colorToHex(editForm.iconColor) }"
-            />
-            <span v-else class="preview-placeholder">?</span>
-          </div>
-          <button class="small-btn" @click="openIconPicker">Choose Icon</button>
+      <section class="edit-column">
+        <div class="form-group">
+          <label>Name</label>
+          <input v-model="editForm.name" type="text" class="text-input" placeholder="Macro name" />
         </div>
-      </div>
 
-      <div class="form-group">
-        <label>Icon Color</label>
-        <input v-model="editForm.iconColorHex" type="color" />
-      </div>
+        <div class="form-group">
+          <label>Action</label>
+          <select v-model="selectedActionId">
+            <option value="">(None)</option>
+            <option v-for="action in store.actions" :key="action.actionId" :value="action.actionId">
+              {{ action.label }}
+            </option>
+          </select>
+        </div>
 
-      <div class="form-group">
-        <label>Background Color</label>
-        <input v-model="editForm.bgColorHex" type="color" />
-      </div>
+        <ActionFields
+          v-if="selectedActionFields.length > 0"
+          v-model="actionParameters"
+          :action-fields="selectedActionFields"
+        />
+      </section>
 
-      <div class="modal-actions">
+      <section class="edit-column">
+        <div class="form-group">
+          <label>Icon</label>
+          <div class="icon-row">
+            <div class="icon-preview" :style="{ background: editForm.bgColorHex }" @click="openIconPicker">
+              <Icon
+                v-if="editForm.icon.source === 'LIBRARY'"
+                :name="normalizeIconValue(editForm.icon.value)"
+                class="preview-icon"
+                :style="{ color: colorToHex(editForm.iconColor) }"
+              />
+              <span v-else class="preview-placeholder">?</span>
+            </div>
+            <button class="small-btn" @click="openIconPicker">Choose Icon</button>
+          </div>
+        </div>
+
+        <div class="color-row">
+          <div class="form-group">
+            <label>Icon Color</label>
+            <input v-model="editForm.iconColorHex" type="color" />
+          </div>
+
+          <div class="form-group">
+            <label>Background Color</label>
+            <input v-model="editForm.bgColorHex" type="color" />
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <template #footer>
+      <div class="form-actions">
         <button v-if="macro" class="delete-btn" @click="deleteMacro">Delete</button>
-        <div class="right-actions">
+        <div class="button-group">
           <button class="cancel-btn" @click="closeModal">Cancel</button>
           <button class="save-btn" @click="saveMacro">Save</button>
         </div>
       </div>
-    </div>
+    </template>
   </Modal>
 
   <IconPickerModal v-model="isIconPickerOpen" @select="handleIconSelect" />
@@ -115,13 +123,6 @@ const editForm = ref({
   backgroundColor: createColor(255, 255, 255),
   iconColorHex: '#000000',
   bgColorHex: '#ffffff',
-})
-
-const iconPreviewBg = computed(() => {
-  const color = editForm.value.iconColor
-  // Relative luminance approximation
-  const luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b
-  return luminance > 128 ? '#111827' : '#ffffff'
 })
 
 watch(isOpen, (open) => {
@@ -245,31 +246,6 @@ function deleteMacro() {
 </script>
 
 <style scoped lang="postcss">
-.edit-form {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #374151;
-}
-
-.form-group input[type='text'] {
-  padding: 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-}
-
 .icon-preview {
   width: 64px;
   height: 64px;
@@ -298,6 +274,12 @@ function deleteMacro() {
   gap: 0.75rem;
 }
 
+.color-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+}
+
 .small-btn {
   padding: 0.5rem;
   width: 96px;
@@ -309,44 +291,5 @@ function deleteMacro() {
   font-size: 0.75rem;
   text-align: center;
   line-height: 1.2;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 1rem;
-}
-
-.right-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.cancel-btn,
-.save-btn,
-.delete-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: #e5e7eb;
-}
-
-.save-btn {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.delete-btn {
-  background-color: #ef4444;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #dc2626;
 }
 </style>

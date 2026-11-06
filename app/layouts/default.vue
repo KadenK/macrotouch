@@ -43,7 +43,6 @@
   letter-spacing: -0.02em;
   font-weight: 700;
   color: #1d4ed8;
-  text-shadow: 0 6px 20px rgba(29, 78, 216, 0.18);
   cursor: pointer;
   margin-left: var(--space-1);
 }

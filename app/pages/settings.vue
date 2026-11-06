@@ -59,7 +59,7 @@
       <div class="setting-row">
         <span>Hide blank buttons</span>
         <label class="switch">
-          <input type="checkbox" />
+          <input v-model="form.hideBlankButtons" type="checkbox" />
           <span class="slider"></span>
         </label>
       </div>
@@ -90,12 +90,12 @@
           <div class="grid-size-inputs">
             <div class="grid-size-field">
               <label class="sub-label">Rows</label>
-              <input v-model.number="form.rows" type="number" min="1" max="20" step="1" class="grid-input" />
+              <input v-model.number="form.rows" type="number" min="1" max="20" step="1" class="text-input number-input" />
             </div>
             <span class="grid-divider">×</span>
             <div class="grid-size-field">
               <label class="sub-label">Columns</label>
-              <input v-model.number="form.columns" type="number" min="1" max="20" step="1" class="grid-input" />
+              <input v-model.number="form.columns" type="number" min="1" max="20" step="1" class="text-input number-input" />
             </div>
           </div>
         </div>
@@ -127,6 +127,7 @@ function buildForm() {
     rows: settings.value.defaultScreenSize.rows,
     columns: settings.value.defaultScreenSize.columns,
     swipeToChangeScreens: settings.value.swipeToChangeScreens,
+    hideBlankButtons: settings.value.hideBlankButtons,
     attemptFullscreen: settings.value.attemptFullscreen,
   }
 }
@@ -167,6 +168,7 @@ function save() {
       columns: Math.max(1, Math.min(20, form.value.columns)),
     },
     swipeToChangeScreens: form.value.swipeToChangeScreens,
+    hideBlankButtons: form.value.hideBlankButtons,
     attemptFullscreen: form.value.attemptFullscreen,
   })
   if (desktopForm.value) electronAPI?.updateDesktopSettings({ ...desktopForm.value })
@@ -199,7 +201,6 @@ function cancel() {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
 }
 
 .section h2 {
@@ -246,82 +247,12 @@ select {
   background-size: 1rem 1rem;
 }
 
-/* Grid size */
-.grid-size-inputs {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-
-.grid-size-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sub-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.grid-input {
-  width: 5rem;
-  text-align: center;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #111827;
-  background: white;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.grid-divider {
-  font-size: 1.25rem;
-  color: #9ca3af;
-  padding-bottom: 0.4rem;
-}
-
 /* Page actions */
 .page-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
   margin-top: var(--space-2);
-}
-
-.cancel-btn,
-.save-btn {
-  padding: 0.5rem 1.25rem;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-ink-2);
-
-  &:hover {
-    background-color: var(--color-primary-50);
-  }
-}
-
-.save-btn {
-  background-color: var(--color-primary);
-  color: white;
-
-  &:hover {
-    filter: brightness(1.1);
-  }
 }
 
 /* Toggles */

@@ -6,6 +6,7 @@ export interface MacroSettings {
   defaultScreenBgColor: Color
   defaultScreenSize: { rows: number; columns: number }
   swipeToChangeScreens: boolean
+  hideBlankButtons: boolean
   attemptFullscreen: boolean
 }
 
@@ -14,6 +15,7 @@ export function createDefaultSettings(): MacroSettings {
     defaultScreenBgColor: { r: 240, g: 240, b: 240 },
     defaultScreenSize: { rows: 3, columns: 5 },
     swipeToChangeScreens: true,
+    hideBlankButtons: true,
     attemptFullscreen: true,
   }
 }

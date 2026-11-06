@@ -1,49 +1,69 @@
 <template>
-  <Modal v-model="isOpen" :title="modalTitle" :fixed-size="true">
+  <Modal v-model="isOpen" :title="modalTitle" :wide="true">
     <div class="edit-form">
-      <div class="form-group">
-        <label>Screen Name</label>
-        <input v-model="editForm.name" type="text" class="text-input" placeholder="Screen name" />
-      </div>
+      <section class="edit-column">
+        <div class="form-group">
+          <label>Screen Name</label>
+          <input v-model="editForm.name" type="text" class="text-input" placeholder="Screen name" />
+        </div>
 
-      <div class="form-group">
-        <label>Grid Size</label>
-        <div class="grid-size-inputs">
-          <div class="grid-size-field">
-            <label class="sub-label">Rows</label>
-            <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
-          </div>
-          <span class="grid-divider">×</span>
-          <div class="grid-size-field">
-            <label class="sub-label">Columns</label>
-            <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+        <div class="form-group">
+          <label>Grid Size</label>
+          <div class="grid-size-inputs">
+            <div class="grid-size-field">
+              <label class="sub-label">Rows</label>
+              <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
+            </div>
+            <span class="grid-divider">×</span>
+            <div class="grid-size-field">
+              <label class="sub-label">Columns</label>
+              <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="form-group">
-        <label>Screen Background Color</label>
-        <input v-model="editForm.bgColorHex" type="color" />
-      </div>
+      <section class="edit-column">
+        <div class="form-group">
+          <label>Screen Background Color</label>
+          <input v-model="editForm.bgColorHex" type="color" />
+        </div>
 
-      <div class="form-group">
-        <label>Default Macro Icon Color</label>
-        <input v-model="editForm.defaultIconColorHex" type="color" />
-      </div>
+        <div class="form-group">
+          <label>Default Macro Icon Color</label>
+          <input v-model="editForm.defaultIconColorHex" type="color" />
+        </div>
 
-      <div class="form-group">
-        <label>Default Macro Background Color</label>
-        <input v-model="editForm.defaultBgColorHex" type="color" />
-      </div>
+        <div class="form-group">
+          <label>Default Macro Background Color</label>
+          <input v-model="editForm.defaultBgColorHex" type="color" />
+        </div>
+      </section>
+    </div>
 
-      <div class="modal-actions">
+    <template #footer>
+      <div class="form-actions">
         <button v-if="!pendingScreen" class="delete-btn" @click="deleteScreen">Delete</button>
-        <div class="right-actions">
+        <div class="button-group">
           <button class="cancel-btn" @click="closeModal">Cancel</button>
           <button class="save-btn" @click="saveScreen">Save</button>
         </div>
       </div>
+    </template>
+  </Modal>
+
+  <Modal v-model="confirmOpen" title="Apply new default colors?">
+    <div class="confirm-body">
+      <p>The default macro colors changed. Which existing macros on this screen should use the new colors?</p>
     </div>
+    <template #footer>
+      <div class="confirm-actions">
+        <button class="cancel-btn" @click="confirmOpen = false">Back</button>
+        <button class="cancel-btn" @click="finishSave('none')">None</button>
+        <button class="save-btn" @click="finishSave('defaults')">Only default-colored</button>
+        <button class="save-btn" @click="finishSave('all')">All macros</button>
+      </div>
+    </template>
   </Modal>
 </template>
 
@@ -53,6 +73,9 @@ import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import type { MacroScreen } from '~/../shared/types'
 import { colorFromHex, colorToHex } from '~/../shared/types'
+import type { Color } from '~/../shared/types'
+
+type ApplyMode = 'all' | 'defaults' | 'none'
 
 const props = defineProps<{
   modelValue: boolean
@@ -103,10 +126,58 @@ function closeModal() {
   isOpen.value = false
 }
 
+const confirmOpen = ref(false)
+
+const FALLBACK_ICON: Color = { r: 0, g: 0, b: 0 }
+const FALLBACK_BG: Color = { r: 255, g: 255, b: 255 }
+
+function sameColor(a?: Color, b?: Color) {
+  return !!a && !!b && a.r === b.r && a.g === b.g && a.b === b.b
+}
+
+function colorsChanged() {
+  const s = screen.value
+  if (!s) return false
+  const oldIcon = colorToHex(s.defaultMacroIconColor ?? FALLBACK_ICON)
+  const oldBg = colorToHex(s.defaultMacroBackgroundColor ?? FALLBACK_BG)
+  return oldIcon !== editForm.value.defaultIconColorHex || oldBg !== editForm.value.defaultBgColorHex
+}
+
 function saveScreen() {
+  if (!screen.value) return
+  const hasMacros = screen.value.macroRows.some((r) => r.macrosIds.some((id) => id && store.getMacro(id)))
+  if (!props.pendingScreen && hasMacros && colorsChanged()) {
+    confirmOpen.value = true
+    return
+  }
+  finishSave('none')
+}
+
+function applyToMacros(mode: ApplyMode) {
+  const s = screen.value
+  if (!s || mode === 'none') return
+  const oldIcon = s.defaultMacroIconColor ?? FALLBACK_ICON
+  const oldBg = s.defaultMacroBackgroundColor ?? FALLBACK_BG
+  const newIcon = colorFromHex(editForm.value.defaultIconColorHex)
+  const newBg = colorFromHex(editForm.value.defaultBgColorHex)
+  for (const row of s.macroRows) {
+    for (const id of row.macrosIds) {
+      const macro = id ? store.getMacro(id) : undefined
+      if (!macro) continue
+      const updated = { ...macro }
+      if (mode === 'all' || sameColor(macro.iconColor, oldIcon)) updated.iconColor = newIcon
+      if (mode === 'all' || sameColor(macro.backgroundColor, oldBg)) updated.backgroundColor = newBg
+      store.updateMacro(updated, id)
+    }
+  }
+}
+
+function finishSave(mode: ApplyMode) {
+  confirmOpen.value = false
   if (!screen.value) return
 
   const isNew = !!props.pendingScreen
+  applyToMacros(mode)
 
   const screenData = {
     ...screen.value,
@@ -141,105 +212,14 @@ function deleteScreen() {
 </script>
 
 <style scoped lang="postcss">
-.edit-form {
+.confirm-body {
   padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
 }
 
-.form-group {
+.confirm-actions {
   display: flex;
-  flex-direction: column;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
-}
-
-.form-group > label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #374151;
-}
-
-.text-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #111827;
-  background: white;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.grid-size-inputs {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-
-.grid-size-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sub-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.number-input {
-  width: 5rem;
-  text-align: center;
-}
-
-.grid-divider {
-  font-size: 1.25rem;
-  color: #9ca3af;
-  padding-bottom: 0.4rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 1rem;
-}
-
-.right-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.cancel-btn,
-.save-btn,
-.delete-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: #e5e7eb;
-}
-
-.save-btn {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.delete-btn {
-  background-color: #ef4444;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #dc2626;
 }
 </style>

@@ -1,6 +1,7 @@
 <template>
   <div
     class="screen-page"
+    :style="{ backgroundColor: pageBackground }"
     @pointerdown="onSwipeStart"
     @pointermove="onSwipeMove"
     @pointerup="onSwipeEnd"
@@ -36,6 +37,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import Screen from '~/components/screen/screen.vue'
+import { colorToHex } from '~/../shared/types'
 
 definePageMeta({
   layout: 'screen',
@@ -46,6 +48,10 @@ const { settings } = storeToRefs(store)
 
 const currentScreenId = ref('')
 const screenList = computed(() => store.getScreenList())
+const pageBackground = computed(() => {
+  const screen = store.screens[currentScreenId.value]
+  return screen ? colorToHex(screen.backgroundColor) : undefined
+})
 
 const toastMessage = ref('')
 const showFullscreenHint = ref(false)
@@ -329,7 +335,6 @@ watch(screenList, (list) => {
   justify-content: center;
   cursor: pointer;
   transition: background 0.15s ease;
-  backdrop-filter: blur(4px);
 
   &:hover {
     background: rgba(0, 0, 0, 0.45);

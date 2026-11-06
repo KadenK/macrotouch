@@ -1,5 +1,5 @@
 <template>
-  <div class="macro-container">
+  <div class="macro-container" :class="{ 'macro-container--hidden': isHiddenBlank }">
     <button v-if="mode === 'edit'" :type="'button'" class="macro edit" @click="openEditor">
       <div v-if="macro" class="macro-display" :style="{ backgroundColor: colorToHex(macro.backgroundColor) }">
         <Icon
@@ -72,6 +72,10 @@ const macro = computed<Macro | undefined>(() =>
   (macroId && mode === 'interact') || (macroId && mode === 'edit') ? store.getMacro(macroId) : undefined,
 )
 
+// On the remote client, a blank cell can be hidden so the screen background shows through.
+// visibility (not v-if) keeps the cell's grid slot so other buttons stay in place.
+const isHiddenBlank = computed(() => mode === 'interact' && !macro.value && store.settings.hideBlankButtons)
+
 const isModalOpen = ref(false)
 
 function openEditor() {
@@ -99,6 +103,11 @@ function handleTrigger() {
   min-width: 0;
 }
 
+.macro-container--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .macro {
   padding: 0;
   width: 100%;
@@ -110,14 +119,12 @@ function handleTrigger() {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  transition: transform 0.1s ease;
 
   &.interact {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     cursor: pointer;
 
     &:active {
-      transform: scale(0.95);
+      opacity: 0.8;
     }
   }
 
@@ -125,10 +132,7 @@ function handleTrigger() {
     border: none;
     background-color: #cfcfcf;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow:
-      0 4px 6px -1px rgb(0 0 0 / 0.1),
-      0 2px 4px -2px rgb(0 0 0 / 0.1);
+    transition: background-color 0.1s ease;
 
     &:disabled {
       cursor: not-allowed;
@@ -136,8 +140,7 @@ function handleTrigger() {
     }
 
     &:hover {
-      box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);
-      transform: scale(0.98);
+      background-color: #bdbdbd;
     }
   }
 }
