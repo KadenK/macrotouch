@@ -38,7 +38,6 @@ onMounted(async () => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  border-bottom: 1px solid var(--color-border);
 }
 
 .search-input {

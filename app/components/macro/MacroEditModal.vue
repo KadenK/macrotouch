@@ -44,12 +44,12 @@
         <div class="color-row">
           <div class="form-group">
             <label>Icon Color</label>
-            <input v-model="editForm.iconColorHex" type="color" />
+            <ColorInput v-model="editForm.iconColorHex" />
           </div>
 
           <div class="form-group">
             <label>Background Color</label>
-            <input v-model="editForm.bgColorHex" type="color" />
+            <ColorInput v-model="editForm.bgColorHex" />
           </div>
         </div>
       </section>
@@ -73,6 +73,7 @@
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
+import ColorInput from '~/components/input/colorInput.vue'
 import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
 import { normalizeIconValue } from '~/composables/useIconData'
 import type { Macro, Position, Icon } from '~/../shared/types'

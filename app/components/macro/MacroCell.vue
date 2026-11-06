@@ -11,6 +11,7 @@
       <div v-else class="macro-display placeholder">
         <span class="placeholder-icon">+</span>
       </div>
+      <span v-if="showLabel" class="macro-label" :style="{ color: labelColor }">{{ labelText }}</span>
     </button>
 
     <div v-else class="macro interact" @click="handleTrigger">
@@ -24,11 +25,8 @@
       <div v-else class="macro-display placeholder">
         <!-- keep empty for non-edit mode -->
       </div>
+      <span v-if="showLabel" class="macro-label" :style="{ color: labelColor }">{{ labelText }}</span>
     </div>
-
-    <span v-if="macro || mode === 'edit'" class="macro-label">
-      {{ macro?.name || (mode === 'edit' ? 'Empty' : '') }}
-    </span>
 
     <MacroEditModal
       v-if="mode === 'edit' && screenId && position"
@@ -76,6 +74,15 @@ const macro = computed<Macro | undefined>(() =>
 // visibility (not v-if) keeps the cell's grid slot so other buttons stay in place.
 const isHiddenBlank = computed(() => mode === 'interact' && !macro.value && store.settings.hideBlankButtons)
 
+// Labels follow the editor/remote setting. Empty cells never have one.
+const showLabel = computed(
+  () => !!macro.value && (mode === 'edit' ? store.settings.showEditorLabels : store.settings.showRemoteLabels),
+)
+
+// The label sits on the macro's bottom edge, in the macro's own icon color so it reads on its background.
+const labelText = computed(() => macro.value?.name ?? '')
+const labelColor = computed(() => (macro.value ? colorToHex(macro.value.iconColor) : undefined))
+
 const isModalOpen = ref(false)
 
 function openEditor() {
@@ -109,6 +116,8 @@ function handleTrigger() {
 }
 
 .macro {
+  position: relative;
+  overflow: hidden;
   padding: 0;
   width: 100%;
   max-width: 100%;
@@ -175,10 +184,14 @@ function handleTrigger() {
 }
 
 .macro-label {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 0.5rem 0.4rem;
   font-size: 0.75rem;
-  color: var(--label-color, #333);
+  line-height: 1.2;
   text-align: center;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

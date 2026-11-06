@@ -1,54 +1,27 @@
 <template>
-  <div>
-    <div class="header">
-      <div class="logo-title" @click="navigateTo('/home')">
-        <Icon class="logo" name="mt:logo" size="2rem"></Icon>
-        <h1 class="brand">MacroTouch</h1>
-      </div>
-      <div class="right-buttons">
-        <InputButton @click="navigateTo('/connect')">Connect</InputButton>
-        <InputButton @click="navigateTo('/settings')">Settings</InputButton>
-      </div>
-    </div>
-    <slot />
-    <footer></footer>
+  <div class="app-shell">
+    <AppHeader />
+    <main class="app-main">
+      <slot />
+    </main>
   </div>
 </template>
 
-<script lang="ts" setup></script>
+<script lang="ts" setup>
+import AppHeader from '~/components/layout/AppHeader.vue'
+</script>
 
-<style lang="postcss" scoped>
-.header {
+<style scoped>
+.app-shell {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 4rem;
-  padding: 0 var(--space-8);
-  margin-bottom: var(--space-3);
-  padding-top: var(--space-2);
+  flex-direction: column;
+  height: 100vh;
 }
 
-.logo-title {
-  display: flex;
-  align-items: center;
-
-  .logo {
-    margin-top: -1rem;
-    margin-right: 0.2rem;
-  }
-}
-
-.brand {
-  font-size: clamp(1.8rem, 2.6vw, 2.8rem);
-  letter-spacing: -0.02em;
-  font-weight: 700;
-  color: var(--color-primary);
-  cursor: pointer;
-  margin-left: var(--space-1);
-}
-
-.right-buttons {
-  display: flex;
-  gap: var(--space-3);
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6);
 }
 </style>

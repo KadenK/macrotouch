@@ -84,7 +84,7 @@
   --color-primary-600: #2563eb;
   --color-primary-50: rgba(59, 130, 246, 0.16);
 
-  --color-ink: #ededed;
+  --color-ink: #f1f1f1;
   --color-ink-2: #d4d4d4;
   --color-muted: #a3a3a3;
   --color-border: #383838;
@@ -109,7 +109,6 @@
   --v-bg-input: #0e0e0e;
   --v-text-muted: #a3a3a3;
 
-  --border-width: 2px;
   --shadow-sm: none;
 
   color-scheme: dark;
@@ -240,6 +239,12 @@ p {
   background: var(--color-hover);
 }
 
+/* Outline-only buttons need a little more edge to read against dark surfaces. */
+:root[data-theme='dark'] .btn-secondary,
+:root[data-theme='dark'] .cancel-btn {
+  border-width: 2px;
+}
+
 /* Destructive */
 .delete-btn {
   background: var(--color-danger);
@@ -285,7 +290,7 @@ p {
   gap: 0.5rem;
 }
 
-.form-group > label {
+.form-group>label {
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--color-text-label);
@@ -341,7 +346,9 @@ p {
   align-items: center;
 }
 
+/* margin-left: auto keeps the buttons on the right even when there is no Delete button beside them. */
 .button-group {
   display: flex;
   gap: 0.5rem;
+  margin-left: auto;
 }
