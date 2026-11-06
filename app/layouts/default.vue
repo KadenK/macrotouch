@@ -10,6 +10,7 @@
         <InputButton @click="navigateTo('/settings')">Settings</InputButton>
       </div>
     </div>
+    <ConnectionStatus />
     <slot />
     <footer></footer>
   </div>
