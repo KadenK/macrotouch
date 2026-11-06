@@ -1,6 +1,7 @@
 <template>
   <div class="screen-layout">
     <ConnectionStatus />
+    <NotPaired />
     <slot />
   </div>
 </template>

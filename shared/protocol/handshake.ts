@@ -12,6 +12,14 @@ import type { OSPlatform } from '../platform'
 interface HelloBase {
   type: 'hello'
   protocolVersion: number
+  /**
+   * The pairing token, required of clients connecting from another device.
+   *
+   * Connections from this computer are accepted without one, so the desktop
+   * editor and the MacroPad window never carry it. A remote client that sends
+   * no token, or a stale one, is refused with `invalid-token` (MAC-31).
+   */
+  token?: string
 }
 
 /** The desktop editor: builds screens and macros. */
@@ -43,11 +51,12 @@ export type ProtocolRole = Hello['role']
  * The master's reply to a client `hello`: everything that client needs before
  * it can render.
  *
- * `catalogs` is sent to editors only. `actionState` arrives with live action
- * state (Demo 2) and is omitted until something produces it — an absent field
- * means "not available", an empty one would mean "nothing to show", and those
- * are different. An action server usually registers after an editor connects,
- * so editors also get {@link CatalogsMessage} when the set of nodes changes.
+ * `catalogs` and `pairingToken` are sent to editors only. `actionState` arrives
+ * with live action state (Demo 2) and is omitted until something produces it —
+ * an absent field means "not available", an empty one would mean "nothing to
+ * show", and those are different. An action server usually registers after an
+ * editor connects, so editors also get {@link CatalogsMessage} when the set of
+ * nodes changes.
  */
 export interface Snapshot {
   type: 'snapshot'
@@ -55,6 +64,12 @@ export interface Snapshot {
   state: MacroState
   /** Editor only. One catalog per connected node; empty when none is connected. */
   catalogs?: Record<NodeId, ActionCatalog>
+  /**
+   * Editor only. The token a remote client needs, so the connect page can put
+   * it in the URL it advertises. Sent to local editors only — an editor that
+   * had to present a token to get here already knows it.
+   */
+  pairingToken?: string
   /** Controller only. Demo 2. */
   actionState?: Record<ActionStateKey, ActionStateEntry>
 }

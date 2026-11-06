@@ -19,6 +19,7 @@ import type { StateCommand } from './commands'
 import type { ProtocolErrorMessage } from './errors'
 import type { CatalogsMessage, ControllerHello, EditorHello, Hello, NodeHello, Snapshot } from './handshake'
 import type { Quit } from './lifecycle'
+import type { PairingTokenMessage, RegenerateToken } from './pairing'
 import type { StatePatch } from './sync'
 
 export * from './version'
@@ -28,6 +29,7 @@ export * from './commands'
 export * from './sync'
 export * from './actions'
 export * from './lifecycle'
+export * from './pairing'
 
 /**
  * Messages are grouped by direction, not pooled into one union.
@@ -37,7 +39,13 @@ export * from './lifecycle'
  */
 
 /** Editor or controller to master. */
-export type ClientToMasterMessage = EditorHello | ControllerHello | StateCommand | MacroTrigger | ViewScreen
+export type ClientToMasterMessage =
+  | EditorHello
+  | ControllerHello
+  | StateCommand
+  | MacroTrigger
+  | ViewScreen
+  | RegenerateToken
 
 /** Master to editor or controller. */
 export type MasterToClientMessage =
@@ -46,6 +54,7 @@ export type MasterToClientMessage =
   | StatePatch
   | ActionResult
   | ActionStateMessage
+  | PairingTokenMessage
   | ProtocolErrorMessage
 
 /** Action Server to master. */

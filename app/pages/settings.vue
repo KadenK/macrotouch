@@ -73,6 +73,27 @@
       </div>
     </section>
 
+    <!-- Pairing. Shown only on the local editor, the one the master accepts
+         regenerate-token from and the only one it tells the token to. -->
+    <section v-if="hostToken" class="section">
+      <h2>Pairing</h2>
+
+      <div class="setting-row pairing-row">
+        <span>
+          Pairing token
+          <small class="hint">
+            Phones you have paired hold this token. Regenerating it disconnects them, and each has to scan the QR code
+            on the Connect page again.
+          </small>
+        </span>
+        <button class="danger-btn" @click="regenerateToken">Regenerate</button>
+      </div>
+
+      <p v-if="regenerated" class="regen-note">
+        New token generated. Paired devices have been disconnected — re-pair them from the Connect page.
+      </p>
+    </section>
+
     <!-- Defaults -->
     <section class="section">
       <h2>Defaults</h2>
@@ -114,12 +135,35 @@
 import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
+import { usePairingToken } from '~/composables/usePairingToken'
+import { useWebSocket } from '~/composables/useWebSocket'
 import { colorFromHex, colorToHex } from '~/../shared/types'
 import { useRouter } from 'vue-router'
 
 const store = useMacroStore()
 const { settings } = storeToRefs(store)
 const router = useRouter()
+
+// Sent on the socket rather than through the store: it rotates a credential on
+// the master, it is not an edit to the state the store owns.
+const { hostToken } = usePairingToken()
+const ws = useWebSocket()
+const regenerated = ref(false)
+
+function regenerateToken() {
+  const ok = confirm(
+    'Regenerate the pairing token?\n\nEvery paired device will be disconnected and has to scan the QR code again.',
+  )
+  if (!ok) return
+  ws.send({ type: 'regenerate-token' })
+}
+
+// Confirmation comes from the master's reply, not from the click: the new token
+// is what proves the regeneration actually happened. A first value is the
+// snapshot arriving, which is not one.
+watch(hostToken, (next, previous) => {
+  if (previous) regenerated.value = true
+})
 
 function buildForm() {
   return {
@@ -322,6 +366,32 @@ select {
   &:hover {
     filter: brightness(1.1);
   }
+}
+
+.pairing-row {
+  gap: var(--space-4);
+}
+
+.danger-btn {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(220, 38, 38, 0.06);
+  }
+}
+
+.regen-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
 }
 
 /* Toggles */

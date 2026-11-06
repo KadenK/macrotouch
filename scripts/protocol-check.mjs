@@ -3,9 +3,15 @@
  * Protocol harness for the MAC-40 wire format (hello/snapshot, command/state-patch).
  *
  * Covers the behavior that no browser can reach: handshake ordering, version
- * mismatch, error replies, patch deltas, tombstones, and the SY-06 concurrent
- * edit that is the point of the ticket. Speaks the protocol directly over `ws`,
- * which the app already depends on, so there is nothing extra to install.
+ * mismatch, error replies, patch deltas, tombstones, the SY-06 concurrent
+ * edit that is the point of the ticket, and the MAC-31 pairing gate. Speaks the
+ * protocol directly over `ws`, which the app already depends on, so there is
+ * nothing extra to install.
+ *
+ * The pairing checks need two things the harness cannot invent: `HTTP_URL` (to
+ * find a non-loopback address of the master, since a loopback client is exempt
+ * from the gate by design) and `MACROTOUCH_DATA_DIR` (to read the token being
+ * enforced). Without them those checks skip rather than pass.
  *
  * Run against a server started with an isolated data directory:
  *
@@ -21,6 +27,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const WS_URL = process.env.WS_URL ?? 'ws://127.0.0.1:4322'
+const HTTP_URL = process.env.HTTP_URL ?? 'http://127.0.0.1:4321'
 const PROTOCOL_VERSION = 1
 const TIMEOUT = 2000
 
@@ -32,6 +39,38 @@ const TIMEOUT = 2000
  */
 const DATA_DIR = process.env.MACROTOUCH_DATA_DIR ?? null
 const STATE_FILE = DATA_DIR ? path.join(DATA_DIR, 'state.json') : null
+const TOKEN_FILE = DATA_DIR ? path.join(DATA_DIR, 'pairing.json') : null
+
+/**
+ * The pairing token the server under test is enforcing (MAC-31).
+ *
+ * Read from disk rather than from a snapshot: a snapshot only carries it for a
+ * local editor, and the checks below need it before they have one.
+ */
+function readToken() {
+  if (!TOKEN_FILE) return null
+  try {
+    const token = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf-8')).token
+    return typeof token === 'string' && token ? token : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A websocket URL for this master that is *not* loopback, so the pairing gate
+ * applies. The master's own `/api/ip` is the authority on what those are.
+ */
+async function remoteWsUrl() {
+  try {
+    const res = await fetch(`${HTTP_URL}/api/ip`)
+    const [first] = await res.json()
+    if (!first?.ip) return null
+    return WS_URL.replace(/\/\/[^:/]+/, `//${first.ip}`)
+  } catch {
+    return null
+  }
+}
 
 /* ------------------------------------------------------------------ client */
 
@@ -119,8 +158,8 @@ function open(url = WS_URL) {
 }
 
 const sockets = []
-async function connect() {
-  const c = await open()
+async function connect(url = WS_URL) {
+  const c = await open(url)
   sockets.push(c)
   return c
 }
@@ -528,6 +567,106 @@ async function main() {
     assert(snapshot.state.macros[macroA.id].name === 'From A', "A's macro was overwritten")
     assert(snapshot.state.macros[macroB.id].name === 'From B', "B's macro was overwritten")
   })
+
+  /* -- pairing ------------------------------------------------------------- */
+  section('Pairing')
+
+  // Both halves need something only the environment can supply: the token the
+  // server is enforcing, and an address that is not loopback. Without either,
+  // these checks would pass for the wrong reason, so they skip instead.
+  const token = readToken()
+  const remoteUrl = await remoteWsUrl()
+
+  await check('a local client needs no token', async () => {
+    const { snapshot } = await connected('controller')
+    assert(snapshot.type === 'snapshot', 'a loopback controller was not given a snapshot')
+  })
+
+  if (!token) {
+    skip(
+      'the local editor is told the pairing token',
+      'set MACROTOUCH_DATA_DIR to the directory the server under test is using',
+    )
+  } else {
+    await check('the local editor is told the pairing token', async () => {
+      const { snapshot } = await connected('editor')
+      assert(snapshot.pairingToken === token, `expected the token from ${TOKEN_FILE}, got ${snapshot.pairingToken}`)
+    })
+
+    await check('a controller is never told the pairing token', async () => {
+      const { snapshot } = await connected('controller')
+      assert(snapshot.pairingToken === undefined, 'a controller snapshot carried the pairing token')
+    })
+  }
+
+  if (!remoteUrl) {
+    skip('a remote client without a token is refused', 'no non-loopback interface, so the gate cannot be exercised')
+    skip('a remote client with a stale token is refused', 'no non-loopback interface')
+    skip('a remote client with a valid token is let in', 'no non-loopback interface')
+    skip('regenerating the token drops remote clients', 'no non-loopback interface')
+  } else {
+    await check('a remote client without a token is refused', async () => {
+      const c = await connect(remoteUrl)
+      c.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller' })
+      const msg = await c.next(isError)
+      assert(msg.error.code === 'invalid-token', `expected invalid-token, got ${msg.error.code}`)
+      await c.waitClose()
+      // The point of the ticket: a refused client gets no state at all.
+      const seen = await c.quiet(200)
+      assert(!seen.some((m) => m.type === 'snapshot'), 'a refused client was sent a snapshot')
+    })
+
+    await check('a remote client with a stale token is refused', async () => {
+      const c = await connect(remoteUrl)
+      c.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller', token: 'not-the-token' })
+      const msg = await c.next(isError)
+      assert(msg.error.code === 'invalid-token', `expected invalid-token, got ${msg.error.code}`)
+      await c.waitClose()
+    })
+
+    if (!token) {
+      skip('a remote client with a valid token is let in', 'set MACROTOUCH_DATA_DIR')
+      skip('regenerating the token drops remote clients', 'set MACROTOUCH_DATA_DIR')
+    } else {
+      await check('a remote client with a valid token is let in', async () => {
+        const c = await connect(remoteUrl)
+        c.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller', token })
+        const snapshot = await c.next((m) => m.type === 'snapshot')
+        assert(snapshot.state, 'a paired remote client got a snapshot with no state')
+      })
+
+      await check('a remote editor cannot regenerate the token', async () => {
+        const c = await connect(remoteUrl)
+        c.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'editor', token })
+        await c.next((m) => m.type === 'snapshot')
+        c.send({ type: 'regenerate-token' })
+        const msg = await c.next(isError)
+        assert(msg.error.code === 'invalid-message', `expected invalid-message, got ${msg.error.code}`)
+      })
+
+      // Last, because it invalidates the token every check above relies on.
+      await check('regenerating the token drops remote clients', async () => {
+        const remote = await connect(remoteUrl)
+        remote.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller', token })
+        await remote.next((m) => m.type === 'snapshot')
+
+        const { c: editor } = await connected('editor')
+        editor.send({ type: 'regenerate-token' })
+
+        const issued = await editor.next((m) => m.type === 'pairing-token')
+        assert(issued.token !== token, 'regenerate-token handed back the same token')
+        assert(readToken() === issued.token, 'the new token was not persisted')
+
+        await remote.waitClose()
+        assert(!editor.closed, 'the local editor was dropped along with the remote clients')
+
+        const stale = await connect(remoteUrl)
+        stale.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller', token })
+        const msg = await stale.next(isError)
+        assert(msg.error.code === 'invalid-token', `the old token still works: got ${msg.error.code}`)
+      })
+    }
+  }
 
   /* -- persistence --------------------------------------------------------- */
   section('Persistence')

@@ -27,15 +27,23 @@ model {
     }
 
     connect = ui 'ConnectPage' {
-      description 'Shows a QR code for connecting a phone'
+      description 'Shows the pairing URL and its QR code, token included, for connecting a phone'
       technology 'pages/connect.vue'
     }
 
+    pairing = service 'PairingToken' {
+      description 'Holds the token the master advertises; the editor is told it on the snapshot'
+      technology 'composables/usePairingToken.ts'
+    }
+
     ws -[event]-> store 'message'
+    ws -[event]-> pairing 'snapshot.pairingToken, pairing-token'
     store -[call]-> ws 'send(command)'
     screens -[call]-> store 'read, moveMacro()'
     macroEditor -[call]-> store 'read, upsertMacro()'
     settings -[call]-> store 'read, updateSettings()'
+    settings -[call]-> ws 'send(regenerate-token)'
+    connect -[call]-> pairing 'read token'
   }
 
   extend macrotouch.controller {
@@ -59,17 +67,29 @@ model {
       technology 'components/macro/MacroCell.vue'
     }
 
+    pairing = service 'PairingToken' {
+      description 'Reads the token out of the URL this device was given and keeps it across reloads'
+      technology 'composables/usePairingToken.ts'
+    }
+
+    notPaired = ui 'NotPairedScreen' {
+      description 'Covers the screen when the master refuses this device\'s token'
+      technology 'components/NotPaired.vue'
+    }
+
     ws -[event]-> store 'message'
+    ws -[call]-> pairing 'read token for hello'
+    ws -[event]-> notPaired 'invalid-token'
     store -[call]-> ws 'send(trigger, view-screen)'
     grid -[call]-> store 'read screens, setScreen()'
     grid -[call]-> cell 'renders'
     cell -[call]-> store 'read state, trigger()'
   }
 
-  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch' {
+  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch, regenerate-token' {
     technology 'WebSocket'
   }
-  macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, view-screen, macro-trigger, state-patch, action-state' {
+  macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello (with token), snapshot, view-screen, macro-trigger, state-patch, action-state' {
     technology 'WebSocket'
   }
   macrotouch.editor.settings -[message]-> macrotouch.electron 'desktop settings' {

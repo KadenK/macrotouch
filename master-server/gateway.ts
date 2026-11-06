@@ -4,6 +4,7 @@ import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand }
 import { PROTOCOL_VERSION } from '../shared/protocol'
 import { ActionRouter } from './action-router'
 import { NodeRegistry } from './node-registry'
+import { isLoopback, type PairingToken } from './pairing'
 import { StateFile } from './state-file'
 import { StateStore, isProtocolError } from './state-store'
 import { parseClientMessage } from './validate'
@@ -29,6 +30,8 @@ type Client = {
   role: ProtocolRole | null
   /** Recorded for Demo 2 watch tracking. Unused here. */
   viewedScreenId: string | null
+  /** From this computer, so exempt from the pairing token and allowed to quit. */
+  fromLoopback: boolean
 }
 
 const COMMAND_TYPES = new Set<StateCommand['type']>([
@@ -41,15 +44,14 @@ const COMMAND_TYPES = new Set<StateCommand['type']>([
 ])
 
 export type GatewayOptions = {
+  /** Shared with the HTTP server, so a regeneration takes effect on both at once. */
+  pairing: PairingToken
   /** Called when Electron on this computer asks the master to stop. */
   onQuit?: () => void
 }
 
-/** Only the desktop app on this computer may stop the master. */
-const isLoopback = (address: string | undefined) =>
-  address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
-
-export function startGateway(port: number, options: GatewayOptions = {}) {
+export function startGateway(port: number, options: GatewayOptions) {
+  const { pairing } = options
   const stateFile = new StateFile()
   const store = new StateStore(stateFile.load())
   const nodes = new NodeRegistry()
@@ -94,6 +96,25 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
     }
   })
 
+  /**
+   * Close every connection that came from another device.
+   *
+   * Called after a regeneration: those clients hold a token that is no longer
+   * valid, and leaving them connected would let a revoked device keep running
+   * macros until it happened to disconnect.
+   */
+  const dropRemoteClients = () => {
+    for (const { socket, fromLoopback: local } of clients.values()) {
+      if (local) continue
+      sendError(socket, { code: 'invalid-token', message: 'The pairing token was regenerated' })
+      try {
+        socket.close()
+      } catch {
+        // Already gone.
+      }
+    }
+  }
+
   const shutdown = () => {
     if (isShuttingDown) return
     isShuttingDown = true
@@ -117,7 +138,7 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
 
   wss.on('connection', (socket: WebSocketConnection, req: { socket: { remoteAddress?: string } }) => {
     const fromLoopback = isLoopback(req.socket.remoteAddress)
-    const client: Client = { socket, role: null, viewedScreenId: null }
+    const client: Client = { socket, role: null, viewedScreenId: null, fromLoopback }
     clients.set(socket, client)
     console.log('WebSocket client connected')
 
@@ -148,6 +169,20 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
           return
         }
 
+        // Every role is gated the same way. A connection from this computer is
+        // trusted by its address: the desktop editor and the MacroPad window
+        // both arrive on the loopback interface and carry no token.
+        if (!fromLoopback && !pairing.verify(msg.token)) {
+          const error: ProtocolError = {
+            code: 'invalid-token',
+            message: 'This device is not paired with this computer',
+          }
+          console.warn(`[Pairing] refused a ${msg.role} connection with ${msg.token ? 'a stale' : 'no'} token`)
+          sendError(socket, error)
+          socket.close()
+          return
+        }
+
         if (msg.role === 'node') {
           // Temporary local-only security measure until we have a proper authentication system. Nodes are only accepted from this computer.
           if (!fromLoopback) {
@@ -169,11 +204,14 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
 
         // Action state is not included yet; an absent field means there is no
         // producer, which differs from an empty one.
+        const isLocalEditor = msg.role === 'editor' && fromLoopback
         send(socket, {
           type: 'snapshot',
           protocolVersion: PROTOCOL_VERSION,
           state: store.getState(),
           ...(msg.role === 'editor' ? { catalogs: nodes.catalogs() } : {}),
+          // The connect page needs the token to build the URL it advertises.
+          ...(isLocalEditor ? { pairingToken: pairing.value } : {}),
         })
         return
       }
@@ -213,6 +251,24 @@ export function startGateway(port: number, options: GatewayOptions = {}) {
       if (msg.type === 'view-screen') {
         // Recorded only. The watch tracker that consumes this is Demo 2.
         client.viewedScreenId = msg.screenId
+        return
+      }
+
+      if (msg.type === 'regenerate-token') {
+        if (!fromLoopback || client.role !== 'editor') {
+          sendError(socket, {
+            code: 'invalid-message',
+            message: 'regenerate-token is only accepted from an editor on this computer',
+          })
+          return
+        }
+        const token = pairing.regenerate()
+        dropRemoteClients()
+        // Local editors get the new token so the connect page can redraw its QR
+        // without reconnecting.
+        for (const { socket: peer, role, fromLoopback: local } of clients.values()) {
+          if (role === 'editor' && local) send(peer, { type: 'pairing-token', token })
+        }
         return
       }
 

@@ -85,6 +85,9 @@ export function parseClientMessage(
   switch (parsed.type) {
     case 'hello': {
       if (typeof parsed.protocolVersion !== 'number') return fail('hello requires a numeric protocolVersion')
+      if (parsed.token !== undefined && !isStr(parsed.token)) {
+        return fail('hello token must be a string when present')
+      }
       const role = parsed.role
       if (role !== 'editor' && role !== 'controller' && role !== 'node') {
         return fail(`hello role must be editor, controller or node, got ${String(role)}`)
@@ -108,6 +111,10 @@ export function parseClientMessage(
     }
     case 'quit':
       return parsed as unknown as DesktopToMasterMessage
+    case 'regenerate-token':
+      // No fields of its own. The gateway still checks that it came from an
+      // editor on this computer.
+      return parsed as unknown as ClientToMasterMessage
     case 'action-result':
       if (!isStr(parsed.requestId) || typeof parsed.ok !== 'boolean') {
         return fail('action-result requires requestId and ok')
