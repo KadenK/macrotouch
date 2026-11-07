@@ -1,5 +1,5 @@
 <template>
-  <SidebarItem :selected="selected">
+  <SidebarItem class="screen-item" :selected="selected">
     <template #content>
       <div v-if="renaming" class="rename-field">
         <UnderlineInput
@@ -125,8 +125,8 @@ function commit() {
   opacity: 0;
 }
 
-:global(.sidebar-item:hover) .item-menu,
-:global(.sidebar-item:focus-within) .item-menu,
+.screen-item:hover .item-menu,
+.screen-item:focus-within .item-menu,
 .item-menu:has([aria-expanded='true']) {
   opacity: 1;
 }
