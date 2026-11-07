@@ -25,7 +25,7 @@ const action: Action = {
     console.log(`MultimediaControl.execute: ${control}`)
 
     const platform = getPlatform()
-    let command = ''
+    let command: string
 
     const toLower = control.toLowerCase()
 

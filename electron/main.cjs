@@ -327,8 +327,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('dialog:selectExecutable', async () => {
     const platform = process.platform
-    let defaultPath = undefined
-    let filters = []
+    let defaultPath
+    let filters
 
     if (platform === 'darwin') {
       defaultPath = '/Applications'
