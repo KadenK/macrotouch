@@ -399,18 +399,22 @@ await check('SE-10', 'the four decorative toggles do not persist', async () => {
   assert(!still, 'Start on boot persisted — it is documented as inert')
 })
 await check('SE-08', 'Swipe to change screens persists', async () => {
-  const swipe = win.locator('.setting-row input[type=checkbox]').nth(3)
-  const before = await swipe.isChecked()
-  await win.locator('.setting-row .switch').nth(3).click()
-  await until(async () => (await swipe.isChecked()) === !before, 'swipe toggle did not flip')
+  // Addressed by label, not position: the tray work inserted a row into General
+  // and silently moved this toggle from index 3 to 4, so the check was clicking
+  // the inert Button haptics switch instead.
+  const row = () => win.locator('.setting-row', { hasText: 'Swipe to change screens' })
+  const swipe = () => row().locator('input[type=checkbox]')
+  const before = await swipe().isChecked()
+  await row().locator('.switch').click()
+  await until(async () => (await swipe().isChecked()) === !before, 'swipe toggle did not flip')
   await win.locator('.save-btn').click()
   await until(async () => win.url().endsWith('/home'), 'save did not navigate')
   await win.locator('.input-button', { hasText: 'Settings' }).click()
   await win.waitForSelector('.settings-page')
-  const after = await win.locator('.setting-row input[type=checkbox]').nth(3).isChecked()
+  const after = await swipe().isChecked()
   assert(after === !before, `swipe toggle did not persist (was ${before}, now ${after})`)
-  if ((await win.locator('.setting-row input[type=checkbox]').nth(3).isChecked()) !== before) {
-    await win.locator('.setting-row .switch').nth(3).click()
+  if ((await swipe().isChecked()) !== before) {
+    await row().locator('.switch').click()
   }
   await win.locator('.save-btn').click()
   await until(async () => win.url().endsWith('/home'), 'restore did not navigate')

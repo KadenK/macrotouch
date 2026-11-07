@@ -10,10 +10,13 @@
       <NavTab to="/connect">Connect</NavTab>
       <NavTab to="/settings">Settings</NavTab>
     </NavTabs>
+
+    <ConnectionStatus inline class="header-status" />
   </header>
 </template>
 
 <script lang="ts" setup>
+import ConnectionStatus from '~/components/ConnectionStatus.vue'
 import NavTab from '~/components/ui/NavTab.vue'
 import NavTabs from '~/components/ui/NavTabs.vue'
 </script>
@@ -46,5 +49,10 @@ import NavTabs from '~/components/ui/NavTabs.vue'
 
 .header-tabs {
   margin-left: var(--space-8);
+}
+
+/* Pushed to the right edge; only present while the connection is down. */
+.header-status {
+  margin-left: auto;
 }
 </style>

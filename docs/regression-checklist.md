@@ -88,9 +88,14 @@ connected client.
 **SY-04 — Settings propagate.** Change a default in Settings and save. Other connected clients
 receive the new settings.
 
-**SY-05 — Reconnect after server restart.** ⚠ With a client open, restart the app's server. The
-client does **not** reconnect automatically — there is no retry. The page must be reloaded. Any
-triggers attempted in the meantime are silently dropped.
+**SY-05 — Reconnect after server restart.** With a client open, restart the app's server. The
+client reconnects on its own with backoff and reapplies the snapshot it receives, so the layout
+comes back without a reload. While a retry is pending it shows a "Reconnecting…" banner, so a
+stale layout reads as stale. A phone that was asleep or off the network reconnects as soon as it is
+visible or back online rather than waiting out the backoff.
+~~⚠ The client does **not** reconnect automatically — there is no retry. The page must be
+reloaded. Any triggers attempted in the meantime are silently dropped.~~ Changed by
+[MAC-48](https://linear.app/macrotouch/issue/MAC-48/websocket-reconnect).
 
 **SY-06 — Concurrent edits.** Edit from two clients at once. Each client sends a command naming
 only what it changed, so edits to different macros, screens or settings all survive. Two clients
@@ -107,6 +112,19 @@ before MAC-40 it received nothing.
 
 **SY-08 — A client never executes actions.** Confirm that a `macro-trigger` broadcast does not
 cause the desktop editor's browser context to attempt the action. Only the host process executes.
+
+**SY-09 — A refusal stops the retry loop.** Point a client at a master speaking a different
+protocol version. The client receives `unsupported-protocol-version`, stops retrying, and shows the
+reason instead of reconnecting in a loop. Added by
+[MAC-48](https://linear.app/macrotouch/issue/MAC-48/websocket-reconnect);
+[MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement)
+adds its invalid-token code to the same path.
+
+**SY-10 — Edits made while disconnected are lost.** ⚠ Stop the master, edit a macro in the editor,
+then let the client reconnect. The edit never reached the master, and the snapshot that arrives on
+reconnect replaces it with no warning. The "Reconnecting…" banner is the only signal that edits
+will not stick. Consistent with SY-06 — the master owns the state — but the window is now longer,
+because before MAC-48 the client stayed dead until someone reloaded it.
 
 ---
 
@@ -414,7 +432,8 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | ST-06 | Save failures are console-only; the UI reports success |
 | ST-07 | The "WebSocket server started" log line prints even when the port was already taken |
 | PA-01 | Interface priority sort doesn't recognise macOS `en0`-style names; Primary badge is arbitrary there |
-| SY-05 | No websocket reconnect; clients go stale until reloaded |
+| ~~SY-05~~ | ~~No websocket reconnect; clients go stale until reloaded~~ — resolved by MAC-48 |
+| SY-10 | Edits made while disconnected are dropped, then overwritten by the reconnect snapshot |
 | SY-06 | Concurrent edits are last-write-wins with no merge or warning |
 | SC-06 | Shrinking a grid drops placements and orphans the macro records |
 | SC-09 | "No screens" does not survive a reload — one is auto-created |
