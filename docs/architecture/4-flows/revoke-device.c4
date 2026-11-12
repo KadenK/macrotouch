@@ -1,0 +1,21 @@
+// Flow: an editor revokes a device, and the device is turned away on its next connect
+views "4. Flows" {
+  dynamic view flow-revoke-device {
+    variant sequence
+    title 'Revoke a Device'
+
+    user -> macrotouch.editor.devices 'chooses Revoke'
+    macrotouch.editor.devices -> macrotouch.editor.ws 'send(revoke-device)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'revoke-device: id'
+    macrotouch.master.gateway -> macrotouch.master.devices 'revoke(id)'
+    macrotouch.master.devices -> macrotouch.master.deviceFile 'save()'
+    macrotouch.master.devices -> macrotouch.master.gateway 'revoked: id'
+    macrotouch.master.gateway -> macrotouch.master.gateway 'close that device\'s sockets'
+    macrotouch.master.gateway -> macrotouch.editor.ws 'devices: updated list'
+
+    macrotouch.controller.ws -> macrotouch.master.gateway 'hello (revoked credential)'
+    macrotouch.master.gateway -> macrotouch.master.devices 'authenticate(cookie)'
+    macrotouch.master.gateway -> macrotouch.controller.ws 'error: revoked'
+    macrotouch.controller.ws -> macrotouch.controller.start 'back to the start page'
+  }
+}

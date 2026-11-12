@@ -21,12 +21,15 @@ views "4. Flows" {
     macrotouch.master.stateFile -> macrotouch.state 'load state.json'
     macrotouch.master.launcher -> macrotouch.action.catalog 'starts action server'
     macrotouch.action.catalog -> macrotouch.plugins 'import() packages'
-    macrotouch.action.masterLink -> macrotouch.master.gateway 'hello: node, nodeId, grouped catalog'
-    macrotouch.master.gateway -> macrotouch.master.nodes 'register node'
+    macrotouch.action.masterLink -> macrotouch.master.gateway 'hello: action-server, secret, grouped catalog'
+    macrotouch.master.gateway -> macrotouch.master.devices 'authenticate(secret)'
+    macrotouch.master.gateway -> macrotouch.master.actionServers 'register action server'
 
-    macrotouch.controller.ws -> macrotouch.master.gateway 'hello: controller'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'hello: controller (cookie)'
+    macrotouch.master.gateway -> macrotouch.master.devices 'authenticate(cookie)'
     macrotouch.controller.ws <- macrotouch.master.gateway 'snapshot: state + action state'
-    macrotouch.editor.ws -> macrotouch.master.gateway 'hello: editor'
-    macrotouch.editor.ws <- macrotouch.master.gateway 'snapshot: state + catalogs'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'hello: editor (cookie)'
+    macrotouch.master.gateway -> macrotouch.master.devices 'authenticate(cookie)'
+    macrotouch.editor.ws <- macrotouch.master.gateway 'snapshot: state + catalogs + devices'
   }
 }

@@ -21,11 +21,17 @@ model {
       technology 'action-server/state-monitor.ts'
     }
 
+    credential = service 'Credential' {
+      description 'Keeps this action server\'s secret, or trades a one-time enrollment token for one'
+      technology 'action-server/credential.ts'
+    }
+
     actions = module 'Actions' {
       description 'The loaded action code, from any package'
       technology 'imported package code'
     }
 
+    masterLink -[call]-> credential 'secret(), enroll(token)'
     masterLink -[call]-> catalog 'toCatalog()'
     masterLink -[call]-> runner 'run(id, params)'
     runner -[call]-> catalog 'get(id)'
@@ -36,8 +42,11 @@ model {
     monitor -[event]-> masterLink 'change'
   }
 
-  macrotouch.action.masterLink -[message]<-> macrotouch.master.gateway 'hello, run-action, action-result, watch-actions, action-state' {
+  macrotouch.action.masterLink -[message]<-> macrotouch.master.gateway 'hello (with secret), enroll, enrolled, run-action, action-result, watch-actions, action-state' {
     technology 'WebSocket'
+  }
+  macrotouch.action.credential -[call]-> macrotouch.actionSecret 'read/write' {
+    technology 'fs'
   }
   macrotouch.action.catalog -[call]-> macrotouch.plugins 'import()'
   macrotouch.action.catalog -[call]-> macrotouch.action.actions 'registers'

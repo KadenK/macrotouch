@@ -32,3 +32,6 @@ data/
 _site
 dist-master
 dist-action
+
+# personal notes
+todo.md

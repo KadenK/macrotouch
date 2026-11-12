@@ -1,0 +1,48 @@
+// Flow: pairing a remote (or a second editor) with an editor's approval and a number match
+views "4. Flows" {
+  dynamic view flow-pair-device {
+    variant sequence
+    title 'Pair a Remote or Editor'
+
+    user -> macrotouch.editor.pair 'opens the Pair page'
+    macrotouch.editor.pair -> macrotouch.editor.ws 'send(resume-pairing)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'resume-pairing'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'resume()'
+    macrotouch.master.pairing -> macrotouch.master.gateway 'mode: on'
+    macrotouch.master.gateway -> macrotouch.editor.ws 'pairing-mode'
+
+    macrotouch.controller.start -> macrotouch.controller.ws 'send(pair-request)'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'pair-request: role, label'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'request(role, label)'
+    macrotouch.master.pairing -> macrotouch.master.gateway 'prompt'
+    macrotouch.master.gateway -> macrotouch.editor.ws 'pair-prompt: role, IP, user agent'
+    macrotouch.editor.ws -> macrotouch.editor.pair 'show the confirm popup'
+    user -> macrotouch.editor.pair 'confirms the request'
+    macrotouch.editor.pair -> macrotouch.editor.ws 'send(pair-decision)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'pair-decision: accept'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'decide(accept)'
+    macrotouch.master.pairing -> macrotouch.master.pairing 'pick the correct number and four others'
+    macrotouch.master.pairing -> macrotouch.master.gateway 'challenge, choices'
+    macrotouch.master.gateway -> macrotouch.editor.ws 'pair-challenge: the correct number'
+    macrotouch.master.gateway -> macrotouch.controller.ws 'pair-choices: five numbers'
+    macrotouch.controller.ws -> macrotouch.controller.start 'show the numbers'
+    user -> macrotouch.controller.start 'taps one number'
+    macrotouch.controller.start -> macrotouch.controller.ws 'send(pair-answer)'
+    macrotouch.controller.ws -> macrotouch.master.gateway 'pair-answer: choice'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'answer(choice)'
+
+    alt {
+      when 'correct number' {
+        macrotouch.master.pairing -> macrotouch.master.devices 'create(role, label)'
+        macrotouch.master.pairing -> macrotouch.master.gateway 'result: ticket'
+        macrotouch.master.gateway -> macrotouch.controller.ws 'pair-result: ticket'
+        macrotouch.controller.start -> macrotouch.master.http 'POST /api/pair/complete: ticket'
+        macrotouch.master.http -> macrotouch.master.pairing 'complete(ticket)'
+        macrotouch.controller.start <- macrotouch.master.http 'Set-Cookie: credential'
+      }
+      else 'wrong number, one attempt only' {
+        macrotouch.master.gateway -> macrotouch.controller.ws 'error: pair-failed'
+      }
+    }
+  }
+}

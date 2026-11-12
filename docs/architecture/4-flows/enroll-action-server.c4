@@ -1,0 +1,41 @@
+// Flow: a headless action server trades a one-time token for its own secret
+views "4. Flows" {
+  dynamic view flow-enroll-action-server {
+    variant sequence
+    title 'Enroll an Action Server'
+
+    alt {
+      when 'action server on this computer' {
+        macrotouch.master.launcher -> macrotouch.master.pairing 'mintEnrollmentToken()'
+        macrotouch.master.launcher -> macrotouch.action.credential 'starts the action server with the token'
+      }
+      else 'action server on another machine' {
+        user -> macrotouch.editor.devices 'chooses Add action server'
+        macrotouch.editor.devices -> macrotouch.editor.ws 'send(create-enrollment-token)'
+        macrotouch.editor.ws -> macrotouch.master.gateway 'create-enrollment-token'
+        macrotouch.master.gateway -> macrotouch.master.pairing 'mintEnrollmentToken()'
+        macrotouch.master.gateway -> macrotouch.editor.ws 'enrollment-token: shown once'
+        macrotouch.action.credential -> macrotouch.action.credential 'started with the token as a flag or environment variable'
+      }
+    }
+
+    macrotouch.action.masterLink -> macrotouch.action.credential 'secret()'
+    macrotouch.action.masterLink <- macrotouch.action.credential 'none yet'
+    macrotouch.action.masterLink -> macrotouch.master.gateway 'enroll: token, label'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'enroll(token)'
+
+    alt {
+      when 'token is valid' {
+        macrotouch.master.pairing -> macrotouch.master.devices 'create(action server, label)'
+        macrotouch.master.devices -> macrotouch.master.deviceFile 'save()'
+        macrotouch.master.gateway -> macrotouch.action.masterLink 'enrolled: secret'
+        macrotouch.action.masterLink -> macrotouch.action.credential 'save the secret'
+        macrotouch.action.credential -> macrotouch.actionSecret 'write'
+        macrotouch.action.masterLink -> macrotouch.master.gateway 'hello: action-server, secret'
+      }
+      else 'token is used or expired' {
+        macrotouch.master.gateway -> macrotouch.action.masterLink 'error: pair-failed'
+      }
+    }
+  }
+}

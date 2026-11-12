@@ -10,7 +10,7 @@ views "4. Flows" {
     macrotouch.controller.ws -> macrotouch.master.gateway 'view-screen: screenId'
     macrotouch.master.gateway -> macrotouch.master.watch 'setViewedScreen()'
     opt 'watched set changed' {
-      macrotouch.master.watch -> macrotouch.master.gateway 'send(nodeId, watch-actions)'
+      macrotouch.master.watch -> macrotouch.master.gateway 'send(deviceId, watch-actions)'
       macrotouch.master.gateway -> macrotouch.action.masterLink 'watch-actions: [actionId, params]'
       macrotouch.action.masterLink -> macrotouch.action.monitor 'setWatched(list)'
     }
@@ -22,7 +22,7 @@ views "4. Flows" {
       opt 'changed or newly watched' {
         macrotouch.action.monitor -> macrotouch.action.masterLink 'action state'
         macrotouch.action.masterLink -> macrotouch.master.gateway 'action-state'
-        macrotouch.master.gateway -> macrotouch.master.nodes 'cache'
+        macrotouch.master.gateway -> macrotouch.master.actionServers 'cache'
         macrotouch.master.gateway -> macrotouch.controller.ws 'action-state'
         macrotouch.controller.ws -> macrotouch.controller.store 'update'
         macrotouch.controller.store -> macrotouch.controller.cell 'value + appearance'
