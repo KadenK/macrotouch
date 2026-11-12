@@ -31,6 +31,7 @@ of the server into Master Server / Action Server / Electron App.
 | Web apps | port `4321` | Served by the master server (`dist-master`); in dev, `nuxt dev` binds `4321` and the master's HTTP API moves to `4323`. Electron probes `/api/ip` and starts the master if nothing answers |
 | WebSocket server | port `4322` | overridable via `WS_PORT` / `NUXT_WS_PORT` |
 | State file | `~/.macroTouch/state.json` | overridable via `MACROTOUCH_DATA_DIR`, else `XDG_DATA_HOME` |
+| Pairing token | `~/.macroTouch/pairing.json` | same directory as the state file. Minted on first run by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement) |
 | Launch modes | `npm run dev` (browser only, starts Nuxt and the master), `npm run dev:electron`, `npm run electron:preview`, packaged `npm run dist` | Several items behave differently with and without the Electron shell — each says which |
 
 A full baseline needs **two passes**: once against an existing `state.json`, and once with
@@ -116,9 +117,10 @@ cause the desktop editor's browser context to attempt the action. Only the host 
 **SY-09 — A refusal stops the retry loop.** Point a client at a master speaking a different
 protocol version. The client receives `unsupported-protocol-version`, stops retrying, and shows the
 reason instead of reconnecting in a loop. Added by
-[MAC-48](https://linear.app/macrotouch/issue/MAC-48/websocket-reconnect);
+[MAC-48](https://linear.app/macrotouch/issue/MAC-48/websocket-reconnect).
 [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement)
-adds its invalid-token code to the same path.
+put `invalid-token` on the same path, so a phone holding a stale token stops and shows the reason
+rather than retrying against a master that will keep refusing it.
 
 **SY-10 — Edits made while disconnected are lost.** ⚠ Stop the master, edit a macro in the editor,
 then let the client reconnect. The edit never reached the master, and the snapshot that arrives on
@@ -226,28 +228,42 @@ found.` rather than an error or an empty list.
 **PA-03 — API failure.** If the interface lookup fails, the page shows `Could not detect local
 network interfaces.`
 
-**PA-04 — URL shape.** Each listed URL is `http://<interface ip>:<port of the current page>/screen`.
+**PA-04 — URL shape.** Each listed URL is
+`http://<interface ip>:<port of the current page>/screen?token=<the pairing token>`.
+~~Each listed URL is `http://<interface ip>:<port of the current page>/screen`.~~ Changed by [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone):
+the token is what a phone is missing, and the URL is the only thing it is handed.
 ~~Each listed URL is `http://<interface ip>:<port of the current page>/`.~~ Changed by [MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change): with
 the redirect gone, the connect page points phones straight at the runtime.
 
 **PA-05 — QR code for the selected interface.** The selected card renders a QR code; others don't.
 Clicking a different card moves the QR to it.
 
-**PA-06 — Pair by typing the URL.** Type the listed URL into a phone browser on the same LAN. The
-phone lands on the runtime screen showing the current layout.
+**PA-06 — Pair by typing the URL.** Type the listed URL into a phone browser on the same LAN,
+query string and all. The phone lands on the runtime screen showing the current layout, with no
+further step. ~~Type the listed URL into a phone browser on the same LAN, with
+`?token=<the token from pairing.json>` appended.~~ Changed by [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone): the advertised URL now carries
+the token, so there is nothing left to append by hand.
 
-**PA-07 — Pair by scanning the QR.** Scan the QR code with the phone camera. Same result as PA-06.
+**PA-07 — Pair by scanning the QR.** Scan the QR code with the phone camera. Same result as PA-06 —
+this is the path the milestone is judged on, and it should take no step beyond the scan.
 
-**PA-08 — Remote clients land on the runtime.** The URL and QR the connect page advertises point
-at `/screen`, so a phone that types or scans them lands on the runtime.
+**PA-08 — The editor is not reachable from another device.** From the phone, request `/`, `/home`,
+`/settings` and `/connect` with no token. Each returns **401** and the page reads "This device is
+not paired". With a valid `?token=`, each loads.
 ~~From the phone, request `/`, `/home`, `/settings` and `/connect`. All redirect (302) to
 `/screen`. The editor and settings are not reachable from a remote device.~~ Changed by
 [MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change):
 `server/middleware/ipRedirect.ts` was removed and role routing moved to the URL the client is
-given, rather than a server-side check of its IP. The master now serves every route to every
-client, so a remote device that navigates to `/home` or `/settings` by hand does reach the editor.
-Recorded here as the current contract — see
-[`baseline-runs/2026-10-22-mac-42.md`](baseline-runs/2026-10-22-mac-42.md).
+given, rather than a server-side check of its IP. The master then served every route to every
+client, so a remote device that navigated to `/home` or `/settings` by hand did reach the editor —
+recorded at the time in [`baseline-runs/2026-10-22-mac-42.md`](baseline-runs/2026-10-22-mac-42.md).
+Changed again by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement), which closed that gap with the pairing token.
+Note the boundary is now the token, not the role: a device holding a valid token may still open
+`/home`. Restricting a paired phone to `/screen` is not something either ticket claims.
+⚠ Check this against a built master (`npm run build && npm run start:master`, or a packaged app).
+Under `npm run dev` the pages come from `nuxt dev` on 4321 while the master's HTTP sits on 4323, so
+nothing gates them and every route loads from any device. The websocket gate (PA-13) applies in
+every mode; only the page gate is absent in dev.
 
 **PA-09 — Local requests reach the editor.** On the host, `/settings` and `/connect` load
 normally. ~~`/` redirects to `/home`.~~ Changed by [MAC-39](https://linear.app/macrotouch/issue/MAC-39/extract-master-into-a-standalone-process-no-behavior-change): the IP-based redirect was replaced with a
@@ -256,6 +272,49 @@ still reach their page.
 
 **PA-10 — Phone reflects live edits.** With the phone connected, add a macro on the host. It appears
 on the phone without a reload.
+
+**PA-11 — The token is minted on first run.** Start the master against an empty data directory.
+`pairing.json` appears beside `state.json`, readable only by the owner, holding one random token.
+Restart: the same token is still there. The token never appears in `state.json`, which is sent to
+every client in full. Added by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement).
+
+**PA-12 — Local clients never need the token.** On the host, `/home`, `/screen` and `/connect` all
+load with no query parameter, and the desktop app connects as before. This is decided by the real
+socket address, not by a header — a remote request claiming `X-Forwarded-For: 127.0.0.1` is still
+refused. Added by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement).
+
+**PA-13 — A stale token is refused and does not retry.** Point a phone at
+`/screen?token=<wrong>`. The page is refused with 401. A client that gets as far as the websocket
+with a bad token receives `invalid-token`, is disconnected, receives no state, and stops retrying
+(SY-09). Added by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement).
+
+**PA-14 — Regenerating the token drops paired devices.** With a phone connected, have a local
+editor send `regenerate-token`. `pairing.json` changes, the phone is disconnected, and its old
+token is refused on the next attempt. Local clients stay connected throughout, and a remote client
+cannot trigger the regeneration. Added by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement); driven from **Settings → Pairing → Regenerate**
+since [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone), which also confirms it on the page once the master hands back the new token.
+~~⚠ There is no UI for this yet.~~ Exercised by `npm run test:protocol`.
+
+**PA-15 — Page assets stay open.** A remote request for a bundled script or stylesheet succeeds
+without a token; only pages (`/screen`, `/home`, anything with no extension or ending `.html`) are
+gated. The token travels in the page URL, and an asset reveals nothing beyond the bundle a paired
+client already downloads. Added by [MAC-31](https://linear.app/macrotouch/issue/MAC-31/server-pairing-token-and-websockethttp-enforcement).
+
+**PA-16 — The phone keeps its token.** After pairing, the token is in this device's local storage
+and stays on the URL as the app navigates, so a reload or a move between routes does not land on a
+refusal. Scanning a newer QR code replaces what is stored rather than being ignored — that is how a
+phone re-pairs after PA-14. Added by [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone).
+
+**PA-17 — The refusal says what to do about it.** A phone whose token the master rejects covers the
+screen with "This device is not paired" and points at the Connect page, rather than leaving a stale
+layout that looks live but does nothing. It names the two cases differently: a token that went
+stale (PA-14) and a device that arrived with none. The reconnect banner (SY-09) is suppressed
+underneath it, so the reason is given once. Added by [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone).
+
+**PA-18 — The Regenerate button is local-only.** **Settings → Pairing** appears on the host editor
+and on no other client, since the master tells only a local editor the token and accepts
+`regenerate-token` from nowhere else. A paired phone that opens `/settings` sees the rest of the
+page with no Pairing section. Added by [MAC-32](https://linear.app/macrotouch/issue/MAC-32/client-token-in-connect-page-qrurl-and-token-handling-on-the-phone).
 
 ---
 

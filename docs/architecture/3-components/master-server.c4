@@ -21,6 +21,11 @@ model {
       technology 'master-server/state-file.ts'
     }
 
+    pairing = module 'PairingToken' {
+      description 'Holds the token a device from off this computer must present, and checks it'
+      technology 'master-server/pairing.ts'
+    }
+
     nodes = service 'NodeRegistry' {
       description 'Tracks connected action servers, their actions, and the latest action state'
       technology 'master-server/node-registry.ts'
@@ -41,6 +46,8 @@ model {
       technology 'master-server/action-router.ts'
     }
 
+    gateway -[call]-> pairing 'verify(), regenerate()'
+    http -[call]-> pairing 'verify()'
     gateway -[call]-> store 'apply(command)'
     store -[event]-> gateway 'change'
     store -[call]-> stateFile 'load(), save()'
@@ -66,6 +73,9 @@ model {
     technology 'child process'
   }
   macrotouch.master.stateFile -[call]-> macrotouch.state 'read/write' {
+    technology 'fs'
+  }
+  macrotouch.master.pairing -[call]-> macrotouch.pairingFile 'read/write' {
     technology 'fs'
   }
 }

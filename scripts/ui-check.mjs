@@ -420,6 +420,9 @@ await check('SE-08', 'Swipe to change screens persists', async () => {
   await until(async () => win.url().endsWith('/home'), 'restore did not navigate')
 })
 
+/** Captured from the connect page, so PA-08 and PA-15 can use both sides of the gate. */
+let pairingToken = null
+
 sec('E. Pairing (PA)')
 await check('PA-01/PA-04/PA-05', 'connect page lists interfaces with URLs and a QR on the selection', async () => {
   await win.locator('.input-button', { hasText: 'Connect' }).click()
@@ -433,11 +436,20 @@ await check('PA-01/PA-04/PA-05', 'connect page lists interfaces with URLs and a 
   }
   const cards = win.locator('.interface-card')
   assert((await cards.count()) > 0, 'no interfaces listed')
+  // The token is what a phone is missing, so PA-04 is only satisfied if the
+  // advertised URL carries it (MAC-15). Without it a scan lands on the
+  // not-paired page, which is how this read before the pairing work.
   const url = (await cards.first().locator('a.link').innerText()).trim()
-  assert(/^http:\/\/\d+\.\d+\.\d+\.\d+:4321\/screen$/.test(url), `URL shape was "${url}"`)
-  console.log(`        (URL is ${url} — points straight at the runtime, per PA-04 since MAC-39)`)
+  assert(/^http:\/\/\d+\.\d+\.\d+\.\d+:4321\/screen\?token=[\w-]+$/.test(url), `URL shape was "${url}"`)
   assert((await win.locator('canvas, img[src^="data:image"], svg').count()) > 0, 'no QR rendered for the selected card')
+  // The editor is on loopback, so it is told the token and can advertise it.
+  const token = new URL(url).searchParams.get('token')
+  const paired = await fetch(url, { redirect: 'manual' })
+  assert(paired.status === 200, `the advertised URL returned ${paired.status} to a LAN client`)
+  console.log(`        (URL carries the pairing token and is accepted: ${url})`)
+  pairingToken = token
 })
+
 // PA-09 as written expects `/` to redirect to `/home`. MAC-39 replaced the
 // IP-based redirect with a chooser page, so the item is tested against the new
 // design: `/` offers the two roles, and both still reach their page.
@@ -454,22 +466,51 @@ await check('PA-09', '/ offers a device choice and both roles are reachable', as
   await until(async () => win.url().endsWith('/screen'), `Controller landed on ${win.url()}`)
 })
 
-// PA-08 under the post-MAC-39 design: a device is routed by the URL it was
-// handed, not by a server-side IP check. What matters is that the URL the
-// connect page advertises lands a phone on the runtime. Every route is now
-// served to every client; that is logged so a change back to redirects shows
-// up as a diff rather than passing silently.
-await check('PA-08', 'the advertised pairing URL lands a remote device on the runtime', async () => {
+// PA-08 since MAC-15: the boundary is the token, not the role. MAC-39 had
+// removed the IP redirect and left every route open to every client; the
+// pairing gate closed that. A device holding a valid token may still open
+// /home — restricting a paired phone to /screen is not something MAC-15 claims.
+await check('PA-08', 'pages are gated on the token for a device off this computer', async () => {
   const lan = (await (await fetch(`${BASE}/api/ip`)).json())[0]
   assert(lan, 'no LAN interface to test against')
-  const screen = await fetch(`http://${lan.ip}:4321/screen`, { redirect: 'manual' })
-  assert(screen.status === 200, `the advertised /screen URL returned ${screen.status} to a LAN client`)
-  const served = []
-  for (const route of ['/', '/home', '/settings', '/connect']) {
-    const res = await fetch(`http://${lan.ip}:4321${route}`, { redirect: 'manual' })
-    served.push(`${route} ${res.status}`)
+  assert(pairingToken, 'no token captured from the connect page')
+
+  const refused = []
+  const allowed = []
+  for (const route of ['/', '/home', '/settings', '/connect', '/screen']) {
+    const bare = await fetch(`http://${lan.ip}:4321${route}`, { redirect: 'manual' })
+    assert(bare.status === 401, `${route} with no token returned ${bare.status}, expected 401`)
+    refused.push(`${route} ${bare.status}`)
+
+    const withToken = await fetch(`http://${lan.ip}:4321${route}?token=${pairingToken}`, { redirect: 'manual' })
+    assert(withToken.status === 200, `${route} with a valid token returned ${withToken.status}`)
+    allowed.push(`${route} ${withToken.status}`)
   }
-  console.log(`        (no server-side role routing since MAC-39: ${served.join(', ')})`)
+  assert(
+    (await (await fetch(`http://${lan.ip}:4321/home`)).text()).includes('not paired'),
+    'the 401 page gives no reason',
+  )
+
+  // The real socket address decides this, never a header — the x-forwarded-for
+  // check MAC-39 removed was spoofable and so was never a boundary.
+  const spoofed = await fetch(`http://${lan.ip}:4321/home`, { headers: { 'x-forwarded-for': '127.0.0.1' } })
+  assert(spoofed.status === 401, `a spoofed x-forwarded-for returned ${spoofed.status}`)
+
+  console.log(`        (no token: ${refused.join(', ')})`)
+  console.log(`        (valid token: ${allowed.join(', ')}; spoofed x-forwarded-for: ${spoofed.status})`)
+})
+
+// PA-15: only pages are gated. The token travels in the page URL, so every
+// asset request off that page would have to carry it, and an asset reveals
+// nothing beyond the bundle a paired client already downloads.
+await check('PA-15', 'bundled assets are served to a remote client without a token', async () => {
+  const lan = (await (await fetch(`${BASE}/api/ip`)).json())[0]
+  const page = await (await fetch(`http://${lan.ip}:4321/screen?token=${pairingToken}`)).text()
+  const asset = page.match(/\/_nuxt\/[A-Za-z0-9._-]+\.js/)?.[0]
+  assert(asset, 'no bundled script found on the page to test with')
+  const res = await fetch(`http://${lan.ip}:4321${asset}`)
+  assert(res.status === 200, `${asset} returned ${res.status} without a token`)
+  console.log(`        (${asset} → ${res.status})`)
 })
 
 sec('F. Runtime screen (RT)')

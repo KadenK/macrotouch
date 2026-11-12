@@ -4,17 +4,23 @@
     <h1 class="brand">MacroTouch</h1>
     <p class="subtitle">What is this device?</p>
     <div class="choices">
-      <!-- Plain links: a full page load makes the connection announce the right role. -->
-      <a class="choice" href="/home">Editor</a>
-      <a class="choice" href="/screen">Controller</a>
+      <!-- Plain links: a full page load makes the connection announce the right role.
+           That also means the master serves each one afresh, so a remote device
+           has to hand its pairing token back on the way (MAC-31). -->
+      <a class="choice" :href="withClientToken('/home')">Editor</a>
+      <a class="choice" :href="withClientToken('/screen')">Controller</a>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
+import { usePairingToken } from '~/composables/usePairingToken'
+
 definePageMeta({
   layout: 'screen',
 })
+
+const { withClientToken } = usePairingToken()
 </script>
 
 <style lang="postcss" scoped>

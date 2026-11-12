@@ -1,6 +1,7 @@
 export type ProtocolErrorCode =
   | 'unsupported-protocol-version'
   | 'invalid-message'
+  | 'invalid-token'
   | 'node-offline'
   | 'unknown-macro'
   | 'unknown-screen'
@@ -15,7 +16,8 @@ export interface ProtocolError {
 
 /**
  * A failure with no request to attach it to: a malformed message, a command
- * naming something that does not exist, a version mismatch at handshake.
+ * naming something that does not exist, a version mismatch at handshake, a
+ * missing or wrong pairing token.
  *
  * Failures that *do* belong to a request travel on `action-result` instead, so
  * the caller can match them to what it sent.
