@@ -1,0 +1,104 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft_release:
+        description: Create a draft GitHub release with the built packages
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: 'false' # packages are unsigned for now
+
+jobs:
+  linux-windows:
+    name: Linux + Windows packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # rpm: needed for the .rpm target; wine: needed to build the Windows NSIS installer on Linux
+      - name: Install packaging tools
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y rpm wine wine32 wine64
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package (AppImage, deb, rpm, NSIS)
+        run: npx electron-builder --linux --win --x64 --publish never
+        env:
+          NODE_ENV: production
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-linux-windows
+          if-no-files-found: error
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.rpm
+            dist-electron/*.exe
+
+  macos:
+    name: macOS packages
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package (dmg, x64 + arm64)
+        run: npx electron-builder --mac --x64 --arm64 --publish never
+        env:
+          NODE_ENV: production
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-macos
+          if-no-files-found: error
+          path: dist-electron/*.dmg
+
+  release:
+    name: Draft release
+    if: inputs.draft_release
+    needs: [linux-windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: packages
+          merge-multiple: true
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release create "v${version}" packages/* \
+            --draft --title "v${version}" --generate-notes \
+            --target "${{ github.sha }}"
