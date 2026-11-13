@@ -34,6 +34,27 @@ async function readMuted(): Promise<ActionStateValue> {
   return null
 }
 
+/** Whether media is playing, or `null` when it can't be read (always on Windows). */
+async function readPlaying(): Promise<ActionStateValue> {
+  const platform = getPlatform()
+  if (platform === 'linux') {
+    // "Playing" / "Paused" / "Stopped". With no player open, playerctl exits non-zero,
+    // which means nothing is playing; only a missing playerctl means unknown.
+    const out = await firstOutput([
+      'test -x /usr/bin/playerctl && (/usr/bin/playerctl status 2>/dev/null || echo Stopped)',
+    ])
+    return out === null ? null : out.trim() === 'Playing'
+  }
+  if (platform === 'darwin') {
+    // The same players PlayPause controls, in the same order.
+    const out = await firstOutput([
+      "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to return (player state as string)' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to return (player state as string)' -e 'else' -e 'return \"stopped\"' -e 'end if'",
+    ])
+    return out === null ? null : out.trim() === 'playing'
+  }
+  return null
+}
+
 const action: Action = {
   actionId: 'multimediaControl',
   label: 'Multimedia Control',
@@ -52,6 +73,14 @@ const action: Action = {
       valueLabels: { true: 'Muted', false: 'Unmuted' },
       defaultIcons: { true: 'ic:baseline-volume-off', false: 'ic:baseline-volume-up' },
       get: readMuted,
+    },
+    {
+      when: { control: 'PlayPause' },
+      kind: 'toggle',
+      valueLabels: { true: 'Playing', false: 'Paused' },
+      // Like a media player: while playing, the button offers pause.
+      defaultIcons: { true: 'ic:baseline-pause', false: 'ic:baseline-play-arrow' },
+      get: readPlaying,
     },
   ],
   async execute(parameters: Record<string, unknown>): Promise<void> {
