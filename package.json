@@ -2,7 +2,7 @@
   "name": "macrotouch",
   "type": "module",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Desktop-first macro pad for touch devices",
   "license": "GPL-3.0-or-later",
   "homepage": "https://github.com/KadenK/macrotouch",
