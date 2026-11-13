@@ -1,151 +1,143 @@
 <template>
   <div class="settings-page">
-    <h1 class="title">Settings</h1>
+    <SidebarContent>
+      <SidebarSection title="Settings">
+        <SidebarItem v-for="s in sections" :key="s.id" :selected="s.id === section" @click="section = s.id">
+          {{ s.label }}
+        </SidebarItem>
+      </SidebarSection>
+    </SidebarContent>
 
-    <!-- General -->
-    <section class="section">
-      <h2>General</h2>
+    <div class="settings-content">
+      <h1 class="title">{{ currentLabel }}</h1>
 
-      <div class="setting-row">
-        <span>Start on boot</span>
-        <label class="switch">
-          <input type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
+      <!-- Editor -->
+      <template v-if="section === 'editor'">
+        <SettingsGroup title="UI">
+          <SettingRow label="Dark mode">
+            <ToggleSwitch :model-value="isDark" aria-label="Dark mode" @update:model-value="toggleTheme" />
+          </SettingRow>
+          <SettingRow label="Show macro labels">
+            <ToggleSwitch v-model="showEditorLabels" aria-label="Show macro labels" />
+          </SettingRow>
+        </SettingsGroup>
 
-      <template v-if="desktopForm">
-        <div class="setting-row">
-          <span>Show tray icon</span>
-          <label class="switch">
-            <input v-model="desktopForm.trayEnabled" type="checkbox" />
-            <span class="slider"></span>
-          </label>
-        </div>
+        <SettingsGroup title="System">
+          <SettingRow label="Start on boot">
+            <ToggleSwitch v-model="startOnBoot" aria-label="Start on boot" />
+          </SettingRow>
 
-        <div class="setting-row" :class="{ 'is-disabled': !desktopForm.trayEnabled }">
-          <span>
-            Minimize on close
-            <small v-if="!desktopForm.trayEnabled" class="hint">"Show tray icon" must be enabled</small>
-          </span>
-          <label class="switch">
-            <input v-model="desktopForm.minimizeOnClose" type="checkbox" :disabled="!desktopForm.trayEnabled" />
-            <span class="slider"></span>
-          </label>
-        </div>
+          <template v-if="desktop">
+            <SettingRow label="Show tray icon">
+              <ToggleSwitch v-model="trayEnabled" aria-label="Show tray icon" />
+            </SettingRow>
+            <SettingRow
+              label="Minimize on close"
+              :hint="trayEnabled ? undefined : '&quot;Show tray icon&quot; must be enabled'"
+              :disabled="!trayEnabled"
+            >
+              <ToggleSwitch v-model="minimizeOnClose" :disabled="!trayEnabled" aria-label="Minimize on close" />
+            </SettingRow>
+          </template>
+        </SettingsGroup>
+
+        <!-- Shown only on the local editor: the one the master accepts regenerate-token from
+               and the only one it tells the token to. -->
+        <SettingsGroup v-if="hostToken" title="Pairing">
+          <SettingRow
+            label="Pairing token"
+            hint="Phones you have paired hold this token. Regenerating it disconnects them, and each has to scan the QR code on the Connect page again."
+          >
+            <button class="danger-btn" @click="regenerateToken">Regenerate</button>
+          </SettingRow>
+          <p v-if="regenerated" class="regen-note">
+            New token generated. Paired devices have been disconnected — re-pair them from the Connect page.
+          </p>
+        </SettingsGroup>
       </template>
-    </section>
 
-    <!-- Device -->
-    <section class="section">
-      <h2>Device</h2>
+      <!-- Remote -->
+      <template v-else-if="section === 'remote'">
+        <SettingsGroup title="Display">
+          <SettingRow label="Show macro labels">
+            <ToggleSwitch v-model="showRemoteLabels" aria-label="Show macro labels" />
+          </SettingRow>
+          <SettingRow label="Hide blank buttons">
+            <ToggleSwitch v-model="hideBlankButtons" aria-label="Hide blank buttons" />
+          </SettingRow>
+          <SettingRow label="Attempt to Fullscreen">
+            <ToggleSwitch v-model="attemptFullscreen" aria-label="Attempt to Fullscreen" />
+          </SettingRow>
+        </SettingsGroup>
 
-      <div class="setting-row">
-        <span>Button haptics</span>
-        <label class="switch">
-          <input type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
+        <SettingsGroup title="Interaction">
+          <SettingRow label="Button haptics">
+            <ToggleSwitch v-model="buttonHaptics" aria-label="Button haptics" />
+          </SettingRow>
+          <SettingRow label="Swipe to change screens">
+            <ToggleSwitch v-model="swipeToChangeScreens" aria-label="Swipe to change screens" />
+          </SettingRow>
+        </SettingsGroup>
+      </template>
 
-      <div class="setting-row">
-        <span>Swipe to change screens</span>
-        <label class="switch">
-          <input v-model="form.swipeToChangeScreens" type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
+      <!-- Defaults -->
+      <template v-else>
+        <SettingsGroup title="Screen">
+          <SettingRow label="Background color">
+            <ColorInput v-model="screenBgHex" label="Default screen background color" />
+          </SettingRow>
+          <SettingRow label="Grid size">
+            <GridSizeInput :size="screenSize" @resize="screenSize = $event" />
+          </SettingRow>
+        </SettingsGroup>
 
-      <div class="setting-row">
-        <span>Hide blank buttons</span>
-        <label class="switch">
-          <input type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <div class="setting-row">
-        <span>Attempt to Fullscreen</span>
-        <label class="switch">
-          <input v-model="form.attemptFullscreen" type="checkbox" />
-          <span class="slider"></span>
-        </label>
-      </div>
-    </section>
-
-    <!-- Pairing. Shown only on the local editor, the one the master accepts
-         regenerate-token from and the only one it tells the token to. -->
-    <section v-if="hostToken" class="section">
-      <h2>Pairing</h2>
-
-      <div class="setting-row pairing-row">
-        <span>
-          Pairing token
-          <small class="hint">
-            Phones you have paired hold this token. Regenerating it disconnects them, and each has to scan the QR code
-            on the Connect page again.
-          </small>
-        </span>
-        <button class="danger-btn" @click="regenerateToken">Regenerate</button>
-      </div>
-
-      <p v-if="regenerated" class="regen-note">
-        New token generated. Paired devices have been disconnected — re-pair them from the Connect page.
-      </p>
-    </section>
-
-    <!-- Defaults -->
-    <section class="section">
-      <h2>Defaults</h2>
-
-      <div class="subsection">
-        <h3>Screen</h3>
-
-        <div class="setting-row">
-          <span>Background color</span>
-          <input v-model="form.bgColorHex" type="color" />
-        </div>
-
-        <div class="setting-row">
-          <span>Grid size</span>
-          <div class="grid-size-inputs">
-            <div class="grid-size-field">
-              <label class="sub-label">Rows</label>
-              <input v-model.number="form.rows" type="number" min="1" max="20" step="1" class="grid-input" />
-            </div>
-            <span class="grid-divider">×</span>
-            <div class="grid-size-field">
-              <label class="sub-label">Columns</label>
-              <input v-model.number="form.columns" type="number" min="1" max="20" step="1" class="grid-input" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Actions -->
-    <div class="page-actions">
-      <button class="cancel-btn" @click="cancel">Cancel</button>
-      <button class="save-btn" @click="save">Save</button>
+        <SettingsGroup title="Macro">
+          <SettingRow label="Icon color">
+            <ColorInput v-model="macroIconHex" label="Default macro icon color" />
+          </SettingRow>
+          <SettingRow label="Background color">
+            <ColorInput v-model="macroBgHex" label="Default macro background color" />
+          </SettingRow>
+        </SettingsGroup>
+      </template>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
 import { usePairingToken } from '~/composables/usePairingToken'
+import { useTheme } from '~/composables/useTheme'
 import { useWebSocket } from '~/composables/useWebSocket'
 import { colorFromHex, colorToHex } from '~/../shared/types'
-import { useRouter } from 'vue-router'
+import type { MacroSettings } from '~/../shared/types'
+import ColorInput from '~/components/input/colorInput.vue'
+import SidebarContent from '~/components/layout/SidebarContent.vue'
+import GridSizeInput from '~/components/screen/GridSizeInput.vue'
+import SettingRow from '~/components/settings/SettingRow.vue'
+import SettingsGroup from '~/components/settings/SettingsGroup.vue'
+import SidebarItem from '~/components/ui/SidebarItem.vue'
+import SidebarSection from '~/components/ui/SidebarSection.vue'
+import ToggleSwitch from '~/components/ui/ToggleSwitch.vue'
 
-const store = useMacroStore()
-const { settings } = storeToRefs(store)
-const router = useRouter()
+definePageMeta({ layout: 'sidebar' })
 
-// Sent on the socket rather than through the store: it rotates a credential on
-// the master, it is not an edit to the state the store owns.
+// --- Sections (sidebar tabs) ---
+const sections = [
+  { id: 'editor', label: 'Editor' },
+  { id: 'remote', label: 'Remote' },
+  { id: 'defaults', label: 'Defaults' },
+] as const
+
+const section = ref<(typeof sections)[number]['id']>('editor')
+const currentLabel = computed(() => sections.find((s) => s.id === section.value)?.label)
+
+const { isDark, toggle: toggleTheme } = useTheme()
+
+// --- Pairing: sent on the socket rather than through the store, because it
+// rotates a credential on the master and is not an edit to the state the store owns.
 const { hostToken } = usePairingToken()
 const ws = useWebSocket()
 const regenerated = ref(false)
@@ -165,19 +157,41 @@ watch(hostToken, (next, previous) => {
   if (previous) regenerated.value = true
 })
 
-function buildForm() {
-  return {
-    bgColorHex: colorToHex(settings.value.defaultScreenBgColor),
-    rows: settings.value.defaultScreenSize.rows,
-    columns: settings.value.defaultScreenSize.columns,
-    swipeToChangeScreens: settings.value.swipeToChangeScreens,
-    attemptFullscreen: settings.value.attemptFullscreen,
-  }
+// --- Settings: every control saves as soon as it changes ---
+const store = useMacroStore()
+const { settings } = storeToRefs(store)
+
+/** A two-way binding to one setting; writing it saves immediately. */
+function setting<K extends keyof MacroSettings>(key: K) {
+  return computed({
+    get: () => settings.value[key],
+    set: (value: MacroSettings[K]) => store.updateSettings({ [key]: value }),
+  })
 }
 
-const form = ref(buildForm())
+/** Same, for a color setting edited as a hex string. */
+function colorSetting(key: 'defaultScreenBgColor' | 'defaultMacroIconColor' | 'defaultMacroBackgroundColor') {
+  return computed({
+    get: () => colorToHex(settings.value[key]),
+    set: (hex: string) => store.updateSettings({ [key]: colorFromHex(hex) }),
+  })
+}
 
-// Settings for the desktop app itself; only present when running inside Electron.
+const showEditorLabels = setting('showEditorLabels')
+const showRemoteLabels = setting('showRemoteLabels')
+const hideBlankButtons = setting('hideBlankButtons')
+const attemptFullscreen = setting('attemptFullscreen')
+const swipeToChangeScreens = setting('swipeToChangeScreens')
+const screenBgHex = colorSetting('defaultScreenBgColor')
+const macroIconHex = colorSetting('defaultMacroIconColor')
+const macroBgHex = colorSetting('defaultMacroBackgroundColor')
+const screenSize = setting('defaultScreenSize')
+
+// Not wired up yet.
+const startOnBoot = ref(false)
+const buttonHaptics = ref(false)
+
+// --- Desktop app settings (only present inside Electron) ---
 type DesktopSettings = { trayEnabled: boolean; minimizeOnClose: boolean }
 type DesktopSettingsAPI = {
   getDesktopSettings: () => Promise<DesktopSettings>
@@ -186,48 +200,39 @@ type DesktopSettingsAPI = {
 const electronAPI = import.meta.client
   ? (window as unknown as { electronAPI?: DesktopSettingsAPI }).electronAPI
   : undefined
-let savedDesktopSettings: DesktopSettings | null = null
-const desktopForm = ref<DesktopSettings | null>(null)
+
+const desktop = ref<DesktopSettings | null>(null)
 
 onMounted(async () => {
-  if (!electronAPI?.getDesktopSettings) return
-  savedDesktopSettings = await electronAPI.getDesktopSettings()
-  desktopForm.value = { ...savedDesktopSettings }
+  if (electronAPI?.getDesktopSettings) desktop.value = await electronAPI.getDesktopSettings()
 })
 
-watch(
-  settings,
-  () => {
-    form.value = buildForm()
-  },
-  { deep: true },
-)
-
-function save() {
-  store.updateSettings({
-    defaultScreenBgColor: colorFromHex(form.value.bgColorHex),
-    defaultScreenSize: {
-      rows: Math.max(1, Math.min(20, form.value.rows)),
-      columns: Math.max(1, Math.min(20, form.value.columns)),
+function desktopSetting<K extends keyof DesktopSettings>(key: K) {
+  return computed({
+    get: () => desktop.value?.[key] ?? false,
+    set: async (value: DesktopSettings[K]) => {
+      if (!desktop.value) return
+      desktop.value = { ...desktop.value, [key]: value }
+      desktop.value = await electronAPI!.updateDesktopSettings({ [key]: value })
     },
-    swipeToChangeScreens: form.value.swipeToChangeScreens,
-    attemptFullscreen: form.value.attemptFullscreen,
   })
-  if (desktopForm.value) electronAPI?.updateDesktopSettings({ ...desktopForm.value })
-  router.push('/home')
 }
 
-function cancel() {
-  form.value = buildForm()
-  if (savedDesktopSettings) desktopForm.value = { ...savedDesktopSettings }
-}
+const trayEnabled = desktopSetting('trayEnabled')
+const minimizeOnClose = desktopSetting('minimizeOnClose')
 </script>
 
-<style lang="postcss" scoped>
+<style scoped>
 .settings-page {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6);
+}
+
+.settings-content {
   max-width: 650px;
   margin: 0 auto;
-  padding: var(--space-1);
 }
 
 .title {
@@ -235,141 +240,6 @@ function cancel() {
   font-weight: 700;
   margin-bottom: var(--space-6);
   color: var(--color-ink);
-}
-
-.section {
-  margin-bottom: var(--space-3);
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
-}
-
-.section h2 {
-  margin-bottom: var(--space-2);
-}
-
-.subsection {
-  margin-top: var(--space-4);
-  padding-left: var(--space-4);
-  border-left: 2px solid var(--color-primary-50);
-}
-
-.subsection h3 {
-  margin-bottom: var(--space-2);
-}
-
-.setting-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: var(--space-3) 0;
-  color: var(--color-ink-2);
-
-  &.is-disabled {
-    opacity: 0.55;
-  }
-}
-
-.hint {
-  display: block;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-select {
-  appearance: none;
-  padding: 0.45rem 2.25rem 0.45rem 0.75rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5 7l5 6 5-6' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
-    no-repeat;
-  background-position: right 0.7rem center;
-  background-size: 1rem 1rem;
-}
-
-/* Grid size */
-.grid-size-inputs {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-
-.grid-size-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sub-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.grid-input {
-  width: 5rem;
-  text-align: center;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #111827;
-  background: white;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.grid-divider {
-  font-size: 1.25rem;
-  color: #9ca3af;
-  padding-bottom: 0.4rem;
-}
-
-/* Page actions */
-.page-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-}
-
-.cancel-btn,
-.save-btn {
-  padding: 0.5rem 1.25rem;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-ink-2);
-
-  &:hover {
-    background-color: var(--color-primary-50);
-  }
-}
-
-.save-btn {
-  background-color: var(--color-primary);
-  color: white;
-
-  &:hover {
-    filter: brightness(1.1);
-  }
-}
-
-.pairing-row {
-  gap: var(--space-4);
 }
 
 .danger-btn {
@@ -384,7 +254,7 @@ select {
   white-space: nowrap;
 
   &:hover {
-    background: rgba(220, 38, 38, 0.06);
+    background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
   }
 }
 
@@ -392,48 +262,5 @@ select {
   margin-top: var(--space-2);
   font-size: var(--text-sm);
   color: var(--color-muted);
-}
-
-/* Toggles */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #e2e8f0;
-  transition: 0.25s;
-  border-radius: 24px;
-}
-
-.slider::before {
-  position: absolute;
-  content: '';
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background: white;
-  transition: 0.25s;
-  border-radius: 50%;
-}
-
-input:checked + .slider {
-  background: var(--color-primary);
-}
-
-input:checked + .slider::before {
-  transform: translateX(20px);
 }
 </style>

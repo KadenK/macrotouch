@@ -7,8 +7,13 @@ model {
     }
 
     store = service 'EditorStore' {
-      description 'Local copy of user data and the action list; sends edits to the master'
+      description 'Local copy of user data, the action list, and the device list; sends edits to the master'
       technology 'Pinia'
+    }
+
+    start = ui 'StartPage' {
+      description 'Page for a device with no credential: claims a new install with the setup code, or asks to pair'
+      technology 'pages/index.vue'
     }
 
     screens = ui 'ScreenEditor' {
@@ -26,24 +31,27 @@ model {
       technology 'pages/settings.vue'
     }
 
-    connect = ui 'ConnectPage' {
-      description 'Shows the pairing URL and its QR code, token included, for connecting a phone'
-      technology 'pages/connect.vue'
+    pair = ui 'PairPage' {
+      description 'Page where an editor turns pairing mode on, approves requests, and sees the number to match'
+      technology 'pages/editor/pair.vue'
     }
 
-    pairing = service 'PairingToken' {
-      description 'Holds the token the master advertises; the editor is told it on the snapshot'
-      technology 'composables/usePairingToken.ts'
+    devices = ui 'DevicesPage' {
+      description 'Page that lists paired devices to rename, set a default screen, or revoke, and mints enrollment tokens for action servers'
+      technology 'pages/editor/devices.vue'
     }
 
     ws -[event]-> store 'message'
-    ws -[event]-> pairing 'snapshot.pairingToken, pairing-token'
+    ws -[event]-> start 'claimed, pair-choices, pair-result, error'
+    ws -[event]-> pair 'pair-prompt, pair-challenge, pairing-mode'
     store -[call]-> ws 'send(command)'
+    start -[call]-> ws 'send(claim, pair-request, pair-answer)'
+    pair -[call]-> ws 'send(pair-decision, resume-pairing)'
+    devices -[call]-> store 'read devices'
+    devices -[call]-> ws 'send(update-device, revoke-device, create-enrollment-token)'
     screens -[call]-> store 'read, moveMacro()'
     macroEditor -[call]-> store 'read, upsertMacro()'
     settings -[call]-> store 'read, updateSettings()'
-    settings -[call]-> ws 'send(regenerate-token)'
-    connect -[call]-> pairing 'read token'
   }
 
   extend macrotouch.controller {
@@ -53,13 +61,18 @@ model {
     }
 
     store = service 'ControllerStore' {
-      description 'Local copy of screens, macros, and live action state; sends taps to the master'
+      description 'Local copy of screens, macros, this device\'s settings, and live action state; sends taps to the master'
       technology 'Pinia'
+    }
+
+    start = ui 'StartPage' {
+      description 'Page for a device with no credential: asks to pair, shows the numbers to tap, and finishes pairing'
+      technology 'pages/index.vue'
     }
 
     grid = ui 'ScreenGrid' {
       description 'Shows the current screen; swipe to change screens'
-      technology 'pages/screen.vue'
+      technology 'pages/remote.vue'
     }
 
     cell = ui 'MacroCell' {
@@ -67,35 +80,25 @@ model {
       technology 'components/macro/MacroCell.vue'
     }
 
-    pairing = service 'PairingToken' {
-      description 'Reads the token out of the URL this device was given and keeps it across reloads'
-      technology 'composables/usePairingToken.ts'
-    }
-
-    notPaired = ui 'NotPairedScreen' {
-      description 'Covers the screen when the master refuses this device\'s token'
-      technology 'components/NotPaired.vue'
-    }
-
     ws -[event]-> store 'message'
-    ws -[call]-> pairing 'read token for hello'
-    ws -[event]-> notPaired 'invalid-token'
+    ws -[event]-> start 'pair-choices, pair-result, revoked, error'
     store -[call]-> ws 'send(trigger, view-screen)'
+    start -[call]-> ws 'send(pair-request, pair-answer)'
     grid -[call]-> store 'read screens, setScreen()'
     grid -[call]-> cell 'renders'
     cell -[call]-> store 'read state, trigger()'
   }
 
-  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch, regenerate-token' {
+  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch, claim, pair-decision, resume-pairing, devices, update-device, revoke-device, create-enrollment-token' {
     technology 'WebSocket'
   }
-  macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello (with token), snapshot, view-screen, macro-trigger, state-patch, action-state' {
+  macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, pair-request, pair-answer, view-screen, macro-trigger, state-patch, action-state' {
     technology 'WebSocket'
   }
   macrotouch.editor.settings -[message]-> macrotouch.electron 'desktop settings' {
     technology 'IPC (preload)'
   }
-  macrotouch.editor.connect -[message]-> macrotouch.master.http 'GET /api/ip' {
+  macrotouch.editor.pair -[message]-> macrotouch.master.http 'GET /api/ip' {
     technology 'HTTP'
   }
 }

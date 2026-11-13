@@ -1,5 +1,5 @@
 <template>
-  <div class="macro-container">
+  <div class="macro-container" :class="{ 'macro-container--hidden': isHiddenBlank }">
     <button v-if="mode === 'edit'" :type="'button'" class="macro edit" @click="openEditor">
       <div v-if="macro" class="macro-display" :style="{ backgroundColor: colorToHex(macro.backgroundColor) }">
         <Icon
@@ -11,6 +11,7 @@
       <div v-else class="macro-display placeholder">
         <span class="placeholder-icon">+</span>
       </div>
+      <span v-if="showLabel" class="macro-label" :style="{ color: labelColor }">{{ labelText }}</span>
     </button>
 
     <div v-else class="macro interact" @click="handleTrigger">
@@ -24,11 +25,8 @@
       <div v-else class="macro-display placeholder">
         <!-- keep empty for non-edit mode -->
       </div>
+      <span v-if="showLabel" class="macro-label" :style="{ color: labelColor }">{{ labelText }}</span>
     </div>
-
-    <span v-if="macro || mode === 'edit'" class="macro-label">
-      {{ macro?.name || (mode === 'edit' ? 'Empty' : '') }}
-    </span>
 
     <MacroEditModal
       v-if="mode === 'edit' && screenId && position"
@@ -72,6 +70,19 @@ const macro = computed<Macro | undefined>(() =>
   (macroId && mode === 'interact') || (macroId && mode === 'edit') ? store.getMacro(macroId) : undefined,
 )
 
+// On the remote client, a blank cell can be hidden so the screen background shows through.
+// visibility (not v-if) keeps the cell's grid slot so other buttons stay in place.
+const isHiddenBlank = computed(() => mode === 'interact' && !macro.value && store.settings.hideBlankButtons)
+
+// Labels follow the editor/remote setting. Empty cells never have one.
+const showLabel = computed(
+  () => !!macro.value && (mode === 'edit' ? store.settings.showEditorLabels : store.settings.showRemoteLabels),
+)
+
+// The label sits on the macro's bottom edge, in the macro's own icon color so it reads on its background.
+const labelText = computed(() => macro.value?.name ?? '')
+const labelColor = computed(() => (macro.value ? colorToHex(macro.value.iconColor) : undefined))
+
 const isModalOpen = ref(false)
 
 function openEditor() {
@@ -99,7 +110,14 @@ function handleTrigger() {
   min-width: 0;
 }
 
+.macro-container--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .macro {
+  position: relative;
+  overflow: hidden;
   padding: 0;
   width: 100%;
   max-width: 100%;
@@ -110,25 +128,20 @@ function handleTrigger() {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  transition: transform 0.1s ease;
 
   &.interact {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     cursor: pointer;
 
     &:active {
-      transform: scale(0.95);
+      opacity: 0.8;
     }
   }
 
   &.edit {
     border: none;
-    background-color: #cfcfcf;
+    background-color: var(--color-cell);
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow:
-      0 4px 6px -1px rgb(0 0 0 / 0.1),
-      0 2px 4px -2px rgb(0 0 0 / 0.1);
+    transition: background-color 0.1s ease;
 
     &:disabled {
       cursor: not-allowed;
@@ -136,8 +149,7 @@ function handleTrigger() {
     }
 
     &:hover {
-      box-shadow: inset 0 2px 4px 0 rgb(0 0 0 / 0.1);
-      transform: scale(0.98);
+      background-color: var(--color-cell-hover);
     }
   }
 }
@@ -153,7 +165,7 @@ function handleTrigger() {
   &.placeholder {
     aspect-ratio: 1/1;
     min-width: 50px;
-    background-color: #cfcfcf;
+    background-color: var(--color-cell);
   }
 
   .placeholder-icon {
@@ -172,10 +184,14 @@ function handleTrigger() {
 }
 
 .macro-label {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 0 0.5rem 0.4rem;
   font-size: 0.75rem;
-  color: var(--label-color, #333);
+  line-height: 1.2;
   text-align: center;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

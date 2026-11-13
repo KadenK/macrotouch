@@ -1,7 +1,15 @@
 <template>
   <Teleport to="body">
     <div v-if="isOpen" class="modal-overlay" @pointerdown.self="close">
-      <div :class="['modal-container', { 'modal-container--fixed': fixedSize }]">
+      <div
+        :class="[
+          'modal-container',
+          {
+            'modal-container--fixed': fixedSize,
+            'modal-container--wide': wide,
+          },
+        ]"
+      >
         <div class="modal-header">
           <h2 class="modal-title">{{ title }}</h2>
           <div class="modal-actions">
@@ -11,7 +19,7 @@
             </button>
           </div>
         </div>
-        <div class="modal-search">
+        <div v-if="$slots.search" class="modal-search">
           <slot name="search"></slot>
         </div>
         <div class="modal-body">
@@ -34,12 +42,14 @@ interface Props {
   showClose?: boolean
   showBack?: boolean
   fixedSize?: boolean
+  wide?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showClose: true,
   showBack: false,
   fixedSize: false,
+  wide: false,
 })
 
 const emit = defineEmits<{
@@ -60,7 +70,7 @@ const close = () => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,14 +79,15 @@ const close = () => {
 }
 
 .modal-container {
-  background: white;
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .modal-container--fixed {
@@ -86,12 +97,16 @@ const close = () => {
   max-height: none;
 }
 
+.modal-container--wide {
+  max-width: 880px;
+  max-height: calc(100vh - 2rem);
+}
+
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
 
@@ -99,7 +114,7 @@ const close = () => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-strong);
 }
 
 .modal-actions {
@@ -113,7 +128,7 @@ const close = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--color-text-subtle);
   padding: 0;
   width: 24px;
   height: 24px;
@@ -123,13 +138,12 @@ const close = () => {
   transition: color 0.2s ease;
 
   &:hover {
-    color: #111827;
+    color: var(--color-text-strong);
   }
 }
 
 .modal-search {
   flex-shrink: 0;
-  border-bottom: 1px solid #e5e7eb;
 }
 
 .modal-body {
@@ -140,7 +154,6 @@ const close = () => {
 
 .modal-footer {
   flex-shrink: 0;
-  border-top: 1px solid #e5e7eb;
   padding: 1rem 1.5rem;
 }
 </style>

@@ -1,0 +1,31 @@
+// Flow: the first editor claims a new install with the setup code
+views "4. Flows" {
+  dynamic view flow-claim {
+    variant sequence
+    title 'Claim a New Install'
+
+    macrotouch.master.pairing -> macrotouch.master.pairing 'no editor exists: mint a setup code, print it to the console'
+    user -> macrotouch.editor.start 'enters the setup code'
+    macrotouch.editor.start -> macrotouch.editor.ws 'send(claim)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'claim: code'
+    macrotouch.master.gateway -> macrotouch.master.pairing 'claim(code)'
+
+    alt {
+      when 'code is correct' {
+        macrotouch.master.pairing -> macrotouch.master.devices 'create(editor)'
+        macrotouch.master.devices -> macrotouch.master.deviceFile 'save()'
+        macrotouch.master.pairing -> macrotouch.master.pairing 'burn the code, close claiming for good'
+        macrotouch.master.gateway -> macrotouch.editor.ws 'claimed: ticket'
+        macrotouch.editor.start -> macrotouch.master.http 'POST /api/pair/complete: ticket'
+        macrotouch.master.http -> macrotouch.master.pairing 'complete(ticket)'
+        macrotouch.editor.start <- macrotouch.master.http 'Set-Cookie: credential'
+      }
+      else 'code is wrong' {
+        macrotouch.master.gateway -> macrotouch.editor.ws 'error: bad-code'
+        opt 'fifth wrong attempt' {
+          macrotouch.master.pairing -> macrotouch.master.pairing 'mint a new setup code, print it to the console'
+        }
+      }
+    }
+  }
+}

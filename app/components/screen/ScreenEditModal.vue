@@ -1,56 +1,64 @@
 <template>
-  <Modal v-model="isOpen" :title="modalTitle" :fixed-size="true">
-    <div class="edit-form">
-      <div class="form-group">
-        <label>Screen Name</label>
-        <input v-model="editForm.name" type="text" class="text-input" placeholder="Screen name" />
-      </div>
+  <Modal v-model="isOpen" :title="modalTitle" :wide="!!pendingScreen">
+    <div class="edit-form" :class="{ 'edit-form--single': !pendingScreen }">
+      <!-- Name and grid size are edited inline on the page for existing screens. -->
+      <section v-if="pendingScreen" class="edit-column">
+        <div class="form-group">
+          <label>Screen Name</label>
+          <input v-model="editForm.name" type="text" class="text-input" placeholder="Screen name" />
+        </div>
 
-      <div class="form-group">
-        <label>Grid Size</label>
-        <div class="grid-size-inputs">
-          <div class="grid-size-field">
-            <label class="sub-label">Rows</label>
-            <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
-          </div>
-          <span class="grid-divider">×</span>
-          <div class="grid-size-field">
-            <label class="sub-label">Columns</label>
-            <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+        <div class="form-group">
+          <label>Grid Size</label>
+          <div class="grid-size-inputs">
+            <div class="grid-size-field">
+              <label class="sub-label">Rows</label>
+              <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
+            </div>
+            <span class="grid-divider">×</span>
+            <div class="grid-size-field">
+              <label class="sub-label">Columns</label>
+              <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="form-group">
-        <label>Screen Background Color</label>
-        <input v-model="editForm.bgColorHex" type="color" />
-      </div>
+      <section class="edit-column">
+        <div class="form-group">
+          <label>Screen Background Color</label>
+          <ColorInput v-model="editForm.bgColorHex" />
+        </div>
 
-      <div class="form-group">
-        <label>Default Macro Icon Color</label>
-        <input v-model="editForm.defaultIconColorHex" type="color" />
-      </div>
+        <div class="form-group">
+          <label>Default Macro Icon Color</label>
+          <ColorInput v-model="editForm.defaultIconColorHex" />
+        </div>
 
-      <div class="form-group">
-        <label>Default Macro Background Color</label>
-        <input v-model="editForm.defaultBgColorHex" type="color" />
-      </div>
+        <div class="form-group">
+          <label>Default Macro Background Color</label>
+          <ColorInput v-model="editForm.defaultBgColorHex" />
+        </div>
+      </section>
+    </div>
 
-      <div class="modal-actions">
-        <button v-if="!pendingScreen" class="delete-btn" @click="deleteScreen">Delete</button>
-        <div class="right-actions">
+    <template #footer>
+      <div class="form-actions form-actions--end">
+        <div class="button-group">
           <button class="cancel-btn" @click="closeModal">Cancel</button>
           <button class="save-btn" @click="saveScreen">Save</button>
         </div>
       </div>
-    </div>
+    </template>
   </Modal>
+
 </template>
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
+import ColorInput from '~/components/input/colorInput.vue'
 import type { MacroScreen } from '~/../shared/types'
 import { colorFromHex, colorToHex } from '~/../shared/types'
 
@@ -63,11 +71,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   saved: [id: string]
-  deleted: []
   cancel: []
 }>()
 
-const modalTitle = computed(() => (props.pendingScreen ? 'Create Screen' : 'Edit Screen'))
+const modalTitle = computed(() => (props.pendingScreen ? 'Create Screen' : 'Screen Colors'))
 const store = useMacroStore()
 const screen = computed(() => props.pendingScreen ?? store.getScreen(props.screenId))
 
@@ -106,8 +113,6 @@ function closeModal() {
 function saveScreen() {
   if (!screen.value) return
 
-  const isNew = !!props.pendingScreen
-
   const screenData = {
     ...screen.value,
     name: editForm.value.name,
@@ -120,7 +125,7 @@ function saveScreen() {
     defaultMacroBackgroundColor: colorFromHex(editForm.value.defaultBgColorHex),
   }
 
-  if (isNew) {
+  if (props.pendingScreen) {
     store.addScreen(screenData)
   } else {
     store.updateScreen(screenData)
@@ -130,116 +135,15 @@ function saveScreen() {
   isOpen.value = false
 }
 
-function deleteScreen() {
-  if (!screen.value) return
-  if (confirm(`Are you sure you want to delete the screen "${screen.value.name}"?`)) {
-    store.deleteScreen(props.screenId)
-    emit('deleted')
-    isOpen.value = false
-  }
-}
 </script>
 
 <style scoped lang="postcss">
-.edit-form {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.edit-form--single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.form-actions--end {
+  justify-content: flex-end;
 }
 
-.form-group > label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #374151;
-}
-
-.text-input {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  color: #111827;
-  background: white;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.grid-size-inputs {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
-}
-
-.grid-size-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sub-label {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.number-input {
-  width: 5rem;
-  text-align: center;
-}
-
-.grid-divider {
-  font-size: 1.25rem;
-  color: #9ca3af;
-  padding-bottom: 0.4rem;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 1rem;
-}
-
-.right-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.cancel-btn,
-.save-btn,
-.delete-btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.cancel-btn {
-  background-color: #e5e7eb;
-}
-
-.save-btn {
-  background-color: #3b82f6;
-  color: white;
-}
-
-.delete-btn {
-  background-color: #ef4444;
-  color: white;
-}
-
-.delete-btn:hover {
-  background-color: #dc2626;
-}
 </style>

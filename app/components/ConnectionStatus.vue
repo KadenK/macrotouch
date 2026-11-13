@@ -3,7 +3,7 @@
     <div
       v-if="message"
       class="connection-banner"
-      :class="`connection-banner--${tone}`"
+      :class="[`connection-banner--${tone}`, { 'connection-banner--inline': inline }]"
       role="status"
       aria-live="polite"
     >
@@ -27,12 +27,17 @@ import { useWebSocket } from '~/composables/useWebSocket'
  * the reason and what to do about it, and a banner underneath would say the
  * same thing twice.
  */
+defineProps<{
+  /** Sit in the normal flow (e.g. inside a header) instead of floating over the page. */
+  inline?: boolean
+}>()
+
 const { status, fatalError } = useWebSocket()
 
 const message = computed(() => {
   if (fatalError.value?.code === 'invalid-token') return ''
   if (status.value === 'offline') {
-    return fatalError.value ? `Disconnected: ${fatalError.value.message}` : 'Disconnected from MacroTouch.'
+    return fatalError.value ? `Disconnected: ${fatalError.value.message}` : 'Disconnected from Server.'
   }
   if (status.value === 'reconnecting') return 'Reconnecting… showing the last known layout.'
   return ''
@@ -57,6 +62,14 @@ const tone = computed(() => (status.value === 'offline' ? 'fatal' : 'warning'))
      swallowing taps meant for a macro. */
   z-index: 10000;
   pointer-events: none;
+}
+
+.connection-banner--inline {
+  position: static;
+  transform: none;
+  z-index: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .connection-banner--warning {

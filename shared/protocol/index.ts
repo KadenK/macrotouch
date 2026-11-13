@@ -40,12 +40,7 @@ export * from './pairing'
 
 /** Editor or controller to master. */
 export type ClientToMasterMessage =
-  | EditorHello
-  | ControllerHello
-  | StateCommand
-  | MacroTrigger
-  | ViewScreen
-  | RegenerateToken
+  EditorHello | ControllerHello | StateCommand | MacroTrigger | ViewScreen | RegenerateToken
 
 /** Master to editor or controller. */
 export type MasterToClientMessage =

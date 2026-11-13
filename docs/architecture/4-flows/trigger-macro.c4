@@ -9,9 +9,9 @@ views "4. Flows" {
     macrotouch.controller.ws -> macrotouch.master.gateway 'macro-trigger'
     macrotouch.master.gateway -> macrotouch.master.router 'route'
     macrotouch.master.router -> macrotouch.master.store 'look up macro'
-    macrotouch.master.router -> macrotouch.master.nodes 'resolve nodeId (default: local)'
+    macrotouch.master.router -> macrotouch.master.actionServers 'resolve deviceId (default: local)'
     alt {
-      when 'node connected' {
+      when 'action server connected' {
         macrotouch.master.gateway <- macrotouch.master.router 'run-action'
         macrotouch.master.gateway -> macrotouch.action.masterLink 'run-action: actionId, params'
         macrotouch.action.masterLink -> macrotouch.action.runner 'run'
@@ -23,7 +23,7 @@ views "4. Flows" {
         macrotouch.controller.ws <- macrotouch.master.gateway 'action-result'
       }
       else {
-        macrotouch.controller.ws <- macrotouch.master.gateway 'error: node offline'
+        macrotouch.controller.ws <- macrotouch.master.gateway 'error: action server offline'
       }
     }
   }

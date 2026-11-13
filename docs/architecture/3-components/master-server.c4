@@ -2,12 +2,12 @@
 model {
   extend macrotouch.master {
     http = service 'WebServer' {
-      description 'Serves the web app pages and this computer\'s IP address'
+      description 'Serves web app pages to paired devices, sets the credential cookie when pairing completes, and gives out this computer\'s IP address'
       technology 'master-server/http.ts'
     }
 
     gateway = service 'SocketServer' {
-      description 'Accepts connections from clients and action servers and passes messages along'
+      description 'Accepts connections, checks who each one is, and passes messages along'
       technology 'master-server/gateway.ts'
     }
 
@@ -21,14 +21,24 @@ model {
       technology 'master-server/state-file.ts'
     }
 
-    pairing = module 'PairingToken' {
-      description 'Holds the token a device from off this computer must present, and checks it'
-      technology 'master-server/pairing.ts'
+    devices = service 'DeviceRegistry' {
+      description 'Holds every paired device and its settings, creates and revokes them, and checks their secrets'
+      technology 'master-server/device-registry.ts'
     }
 
-    nodes = service 'NodeRegistry' {
+    deviceFile = module 'DeviceFile' {
+      description 'Reads and writes the device file'
+      technology 'master-server/device-file.ts'
+    }
+
+    pairing = service 'PairingService' {
+      description 'Runs the first-install claim, pairing mode, the number match, and action server enrollment'
+      technology 'master-server/pairing-service.ts'
+    }
+
+    actionServers = service 'ActionServerRegistry' {
       description 'Tracks connected action servers, their actions, and the latest action state'
-      technology 'master-server/node-registry.ts'
+      technology 'master-server/action-server-registry.ts'
     }
 
     watch = service 'WatchTracker' {
@@ -46,36 +56,43 @@ model {
       technology 'master-server/action-router.ts'
     }
 
-    gateway -[call]-> pairing 'verify(), regenerate()'
-    http -[call]-> pairing 'verify()'
+    http -[call]-> devices 'authenticate(cookie)'
+    http -[call]-> pairing 'complete(ticket)'
+    gateway -[call]-> devices 'authenticate(cookie or secret), update(), revoke()'
+    gateway -[call]-> pairing 'claim, request, decide, answer, enroll, resume'
+    pairing -[event]-> gateway 'prompt, challenge, choices, mode'
+    pairing -[call]-> devices 'create(role, label)'
+    devices -[event]-> gateway 'change, revoked'
+    devices -[call]-> deviceFile 'load(), save()'
+    launcher -[call]-> pairing 'mintEnrollmentToken()'
     gateway -[call]-> store 'apply(command)'
     store -[event]-> gateway 'change'
     store -[call]-> stateFile 'load(), save()'
-    gateway -[call]-> nodes 'register(), setState()'
-    nodes -[event]-> gateway 'change'
+    gateway -[call]-> actionServers 'register(), setState()'
+    actionServers -[event]-> gateway 'change'
     gateway -[call]-> router 'trigger()'
     gateway -[call]-> watch 'setViewedScreen(), removeClient()'
     store -[event]-> watch 'change'
     watch -[call]-> store 'getScreen(), getMacro()'
-    watch -[call]-> gateway 'send(nodeId, watch-actions)'
+    watch -[call]-> gateway 'send(deviceId, watch-actions)'
     router -[call]-> store 'getMacro()'
-    router -[call]-> nodes 'get(nodeId)'
-    router -[call]-> gateway 'request(nodeId, run-action)'
+    router -[call]-> actionServers 'get(deviceId)'
+    router -[call]-> gateway 'request(deviceId, run-action)'
   }
 
-  macrotouch.editor -[message]-> macrotouch.master.http 'GET pages' {
+  macrotouch.editor -[message]-> macrotouch.master.http 'GET pages, POST /api/pair/complete' {
     technology 'HTTP'
   }
-  macrotouch.controller -[message]-> macrotouch.master.http 'GET pages' {
+  macrotouch.controller -[message]-> macrotouch.master.http 'GET pages, POST /api/pair/complete' {
     technology 'HTTP'
   }
-  macrotouch.master.launcher -> macrotouch.action 'starts, restarts, stops' {
+  macrotouch.master.launcher -> macrotouch.action 'starts with an enrollment token, restarts, stops' {
     technology 'child process'
   }
   macrotouch.master.stateFile -[call]-> macrotouch.state 'read/write' {
     technology 'fs'
   }
-  macrotouch.master.pairing -[call]-> macrotouch.pairingFile 'read/write' {
+  macrotouch.master.deviceFile -[call]-> macrotouch.devicesFile 'read/write' {
     technology 'fs'
   }
 }

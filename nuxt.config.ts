@@ -9,6 +9,13 @@ export default defineNuxtConfig({
   app: {
     head: {
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/_nuxt/assets/icons/logo.svg' }],
+      // Set the theme before first paint so there is no light-mode flash.
+      script: [
+        {
+          innerHTML:
+            "try{var t=localStorage.getItem('macrotouch-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}",
+        },
+      ],
     },
   },
 

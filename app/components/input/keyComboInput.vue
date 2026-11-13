@@ -199,7 +199,7 @@ const onBlur = () => {
 .input-field {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
   background-color: var(--v-bg-input, #fff);
 }
@@ -207,7 +207,7 @@ const onBlur = () => {
 .clear-button {
   width: fit-content;
   padding: 0.35rem 0.7rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
   background: var(--v-btn-background, #f7f7f7);
   cursor: pointer;
@@ -225,7 +225,7 @@ const onBlur = () => {
 .record-button {
   width: fit-content;
   padding: 0.35rem 0.7rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
   background: var(--v-btn-background, #f7f7f7);
   cursor: pointer;

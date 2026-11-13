@@ -40,7 +40,7 @@ const onChange = (event: Event) => {
 .select-field {
   width: 100%;
   padding: 0.5rem;
-  border: 1px solid var(--v-border-color, #ccc);
+  border: var(--border-width, 1px) solid var(--v-border-color, #ccc);
   border-radius: 4px;
 }
 </style>

@@ -41,12 +41,17 @@ model {
       technology 'JSON file'
     }
 
-    pairingFile = datastore 'Pairing Token' {
-      description 'The token a device from off this computer must present; kept out of the state file, which is sent to every client'
+    devicesFile = datastore 'Device Records' {
+      description 'Every paired device with its role, name, settings, and a hash of its secret; kept out of the state file, which is sent to every client'
       technology 'JSON file'
     }
 
-    electron -> master 'starts if not running' {
+    actionSecret = datastore 'Action Server Secret' {
+      description 'The secret that proves this action server to the master'
+      technology 'file, mode 0600'
+    }
+
+    electron -> master 'starts if not running, reads its setup code' {
       technology 'detached process'
     }
     electron -[message]-> master 'quit' {
@@ -76,19 +81,19 @@ views "2. Containers" {
     include *, user, os
     // Summary titles for edges that roll up from Level 3 as [...]
     include macrotouch.editor -> macrotouch.master with {
-      title 'loads pages, syncs edits'
+      title 'pairs, loads pages, syncs edits'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.controller -> macrotouch.master with {
-      title 'loads pages, sends taps, gets live state'
+      title 'pairs, loads pages, sends taps, gets live state'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.action -> macrotouch.master with {
-      title 'runs actions, reports live state'
+      title 'enrolls, runs actions, reports live state'
       technology 'WebSocket'
     }
     include macrotouch.electron -> macrotouch.master with {
-      title 'starts if not running, sends quit'
+      title 'starts if not running, claims a new install, sends quit'
       technology 'detached process, WebSocket'
     }
   }

@@ -66,8 +66,15 @@ export const useMacroStore = defineStore('Macro', () => {
       settings.value = {
         defaultScreenBgColor: state.settings.defaultScreenBgColor ?? { ...DEFAULT_SETTINGS.defaultScreenBgColor },
         defaultScreenSize: state.settings.defaultScreenSize ?? { ...DEFAULT_SETTINGS.defaultScreenSize },
+        defaultMacroIconColor: state.settings.defaultMacroIconColor ?? { ...DEFAULT_SETTINGS.defaultMacroIconColor },
+        defaultMacroBackgroundColor: state.settings.defaultMacroBackgroundColor ?? {
+          ...DEFAULT_SETTINGS.defaultMacroBackgroundColor,
+        },
         swipeToChangeScreens: state.settings.swipeToChangeScreens ?? DEFAULT_SETTINGS.swipeToChangeScreens,
+        hideBlankButtons: state.settings.hideBlankButtons ?? DEFAULT_SETTINGS.hideBlankButtons,
         attemptFullscreen: state.settings.attemptFullscreen ?? DEFAULT_SETTINGS.attemptFullscreen,
+        showEditorLabels: state.settings.showEditorLabels ?? DEFAULT_SETTINGS.showEditorLabels,
+        showRemoteLabels: state.settings.showRemoteLabels ?? DEFAULT_SETTINGS.showRemoteLabels,
       }
     }
 

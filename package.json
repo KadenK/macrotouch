@@ -34,7 +34,7 @@
     "typecheck:protocol": "tsc -p tsconfig.protocol.json"
   },
   "dependencies": {
-    "node-notifier": "^10.0.1",
+    "node-notifier": "^12.1.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
@@ -47,25 +47,26 @@
     "@iconify/utils": "^3.1.0",
     "@nuxt/eslint": "^1.15.1",
     "@nuxt/icon": "^2.2.1",
-    "@pinia/nuxt": "^0.11.3",
+    "@pinia/nuxt": "^1.0.3",
     "@types/node-notifier": "^8.0.5",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.1",
-    "concurrently": "^9.2.1",
+    "@vue/devtools-api": "^8.2.1",
+    "concurrently": "^10.0.6",
     "cross-env": "^10.1.0",
-    "electron": "^40.6.0",
+    "electron": "^45.2.3",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.28.2",
-    "eslint": "^9.39.3",
+    "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "likec4": "^1.59.4",
     "nuxt": "^4.3.1",
-    "postcss-nested": "^7.0.2",
+    "pinia": "^4.1.0",
+    "postcss-nested": "^9.0.1",
     "qrcode": "^1.5.4",
     "tsx": "^4.23.15",
     "vue": "^3.5.28",
-    "vue-router": "^4.6.4",
     "wait-on": "^9.0.4"
   },
   "build": {
