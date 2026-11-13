@@ -22,6 +22,7 @@ if (!gotSingleInstanceLock) {
 
 // Keep global references to prevent garbage collection
 let mainWindow = null
+let macroPadWindow = null
 let tray = null
 let trayStatus = null
 let trayRefreshTimer = null
@@ -280,6 +281,67 @@ function createWindow(route = '/home', { show = true } = {}) {
   })
 }
 
+/**
+ * The route the MacroPad window loads: the same `/screen` page a phone gets.
+ *
+ * `desktop=1` tells that page it is in a window of its own rather than on a
+ * phone, so it leaves the display alone instead of going fullscreen.
+ */
+const MACROPAD_ROUTE = '/screen?desktop=1'
+
+/**
+ * Opens the MacroPad — the touch view — in its own window, or focuses it.
+ *
+ * A second window rather than a route in the main one, so the macros stay
+ * reachable while the editor is open beside them. It needs no pairing token:
+ * the master trusts the loopback address it arrives on (master-server/pairing.ts),
+ * and it carries no preload because the page only talks to the master over the
+ * websocket.
+ */
+function openMacroPad() {
+  if (macroPadWindow && !macroPadWindow.isDestroyed()) {
+    if (macroPadWindow.isMinimized()) macroPadWindow.restore()
+    macroPadWindow.show()
+    macroPadWindow.focus()
+    return
+  }
+
+  macroPadWindow = new BrowserWindow({
+    width: 600,
+    height: 480,
+    minWidth: 320,
+    minHeight: 240,
+    title: 'MacroTouch MacroPad',
+    icon: appIcon,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+
+  if (macroPadWindow.setIcon) {
+    macroPadWindow.setIcon(appIcon)
+  }
+
+  // Nuxt sets a document title on navigation; keep the one naming the window.
+  macroPadWindow.on('page-title-updated', (event) => event.preventDefault())
+
+  macroPadWindow.loadURL(appUrl(MACROPAD_ROUTE))
+
+  macroPadWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http')) {
+      shell.openExternal(url)
+      return { action: 'deny' }
+    }
+    return { action: 'allow' }
+  })
+
+  macroPadWindow.on('closed', () => {
+    macroPadWindow = null
+  })
+}
+
 /** The disabled first line of the tray menu. */
 async function readMasterStatus() {
   return new Promise((resolve) => {
@@ -376,6 +438,10 @@ app.whenReady().then(async () => {
       Object.entries(patch ?? {}).filter(([key, value]) => allowed.includes(key) && typeof value === 'boolean'),
     )
     return updateDesktopSettings(clean)
+  })
+
+  ipcMain.handle('window:openMacroPad', () => {
+    openMacroPad()
   })
 
   app.on('activate', () => {
