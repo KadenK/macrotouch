@@ -446,10 +446,13 @@ already-connected devices (see RT-06/RT-09).
 **SE-09 — `Attempt to Fullscreen` is live.** Toggling it and saving changes runtime behavior on the
 next runtime page load.
 
-**SE-10 — Inert toggles.** ⚠ `Start on boot`, `Minimize on close`, `Button haptics` and `Hide blank
-buttons` are rendered but **not wired to anything**. They do not persist, do not survive a page
-reload, and have no effect. This is current behavior, not a regression — do not implement them
+**SE-10 — Inert toggles.** ⚠ `Button haptics` is rendered but **not wired to anything**. It does not persist, does not survive a page
+reload, and has no effect. This is current behavior, not a regression — do not implement them
 inside a MAC-11 ticket.
+
+**SE-12 — `Start on boot` is live (desktop app only).** Toggling it registers or removes an OS login
+item (Linux: `~/.config/autostart/macrotouch.desktop`). At login the app starts hidden in the tray
+when the tray icon is enabled. The toggle reflects the OS state on launch. Not covered by `test:ui`.
 
 **SE-11 — Settings round-trip.** Save settings, restart the app, reopen Settings. The two working
 toggles, color and grid size are as saved.
@@ -504,4 +507,4 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | AC-05/06 | macOS needs Accessibility permission; without it, input actions fail silently |
 | AC-07 | macOS `Mute` does not toggle; behavior depends on Music/Spotify being open |
 | SE-03 | `Cancel` does not leave the Settings page |
-| SE-10 | Four Settings toggles are decorative and do nothing |
+| SE-10 | The `Button haptics` toggle is decorative and does nothing |
