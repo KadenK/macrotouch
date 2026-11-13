@@ -1,6 +1,7 @@
 <template>
   <div class="app-shell">
     <AppHeader />
+    <NotPaired />
     <main class="app-main">
       <slot />
     </main>
@@ -9,6 +10,7 @@
 
 <script lang="ts" setup>
 import AppHeader from '~/components/layout/AppHeader.vue'
+import NotPaired from '~/components/NotPaired.vue'
 </script>
 
 <style scoped>

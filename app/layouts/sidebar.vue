@@ -1,6 +1,7 @@
 <template>
   <div class="app-shell">
     <AppHeader />
+    <NotPaired />
     <div class="sidebar-layout">
       <!-- Pages fill this with <SidebarContent>. -->
       <aside id="layout-sidebar" class="layout-sidebar"></aside>
@@ -13,6 +14,7 @@
 
 <script lang="ts" setup>
 import AppHeader from '~/components/layout/AppHeader.vue'
+import NotPaired from '~/components/NotPaired.vue'
 </script>
 
 <style scoped>

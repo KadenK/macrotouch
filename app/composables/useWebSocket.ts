@@ -1,4 +1,5 @@
 import { useRuntimeConfig } from '#app'
+import { usePairingToken } from './usePairingToken'
 import { WEBSOCKET_PORT } from '../../shared/websocket'
 import { PROTOCOL_VERSION } from '../../shared/protocol'
 import type {
@@ -15,6 +16,7 @@ type WebSocketHandlers = {
   snapshot?: (snapshot: Snapshot) => void
   patch?: (patch: StatePatch) => void
   catalogs?: (catalogs: CatalogsMessage['catalogs']) => void
+  pairingToken?: (token: string) => void
   error?: (error: ProtocolError) => void
   open?: () => void
   close?: () => void
@@ -36,16 +38,17 @@ export type ConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'offline
 /**
  * Refusals, as opposed to a dropped wire. These stop the retry loop.
  *
- * MAC-31 adds its invalid-token code here: a phone holding a stale token has to
- * stop and show the pairing screen rather than hammer the master. Every other
- * code is recoverable and leaves the connection alone.
+ * A phone holding a stale token has to stop and show the pairing screen rather
+ * than hammer the master, so `invalid-token` is terminal too (MAC-31). Every
+ * other code is recoverable and leaves the connection alone.
  */
-const FATAL_CODES = new Set<ProtocolErrorCode>(['unsupported-protocol-version'])
+const FATAL_CODES = new Set<ProtocolErrorCode>(['unsupported-protocol-version', 'invalid-token'])
 
 const FIRST_RETRY_MS = 500
 const MAX_RETRY_MS = 15_000
 
 const createWebSocket = () => {
+  const { clientToken } = usePairingToken()
   const ws = ref<WebSocket | null>(null)
   const isConnected = ref(false)
   const status = ref<ConnectionStatus>('connecting')
@@ -109,6 +112,9 @@ const createWebSocket = () => {
         type: 'hello',
         protocolVersion: PROTOCOL_VERSION,
         role: roleForPath(window.location.pathname),
+        // Omitted rather than sent empty on the host, which pairs by its socket
+        // address and would be refused for presenting a blank token.
+        ...(clientToken.value ? { token: clientToken.value } : {}),
       })
       handlers.open?.()
       console.log('WebSocket connected')
@@ -134,6 +140,9 @@ const createWebSocket = () => {
           break
         case 'catalogs':
           handlers.catalogs?.(data.catalogs)
+          break
+        case 'pairing-token':
+          handlers.pairingToken?.(data.token)
           break
         case 'error':
           // The master closes the socket straight after a fatal error, so record

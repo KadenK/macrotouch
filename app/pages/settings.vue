@@ -9,92 +9,108 @@
     </SidebarContent>
 
     <div class="settings-content">
-        <h1 class="title">{{ currentLabel }}</h1>
+      <h1 class="title">{{ currentLabel }}</h1>
 
-        <!-- Editor -->
-        <template v-if="section === 'editor'">
-          <SettingsGroup title="UI">
-            <SettingRow label="Dark mode">
-              <ToggleSwitch :model-value="isDark" aria-label="Dark mode" @update:model-value="toggleTheme" />
-            </SettingRow>
-            <SettingRow label="Show macro labels">
-              <ToggleSwitch v-model="showEditorLabels" aria-label="Show macro labels" />
-            </SettingRow>
-          </SettingsGroup>
+      <!-- Editor -->
+      <template v-if="section === 'editor'">
+        <SettingsGroup title="UI">
+          <SettingRow label="Dark mode">
+            <ToggleSwitch :model-value="isDark" aria-label="Dark mode" @update:model-value="toggleTheme" />
+          </SettingRow>
+          <SettingRow label="Show macro labels">
+            <ToggleSwitch v-model="showEditorLabels" aria-label="Show macro labels" />
+          </SettingRow>
+        </SettingsGroup>
 
-          <SettingsGroup title="System">
-            <SettingRow label="Start on boot">
-              <ToggleSwitch v-model="startOnBoot" aria-label="Start on boot" />
-            </SettingRow>
+        <SettingsGroup title="System">
+          <SettingRow label="Start on boot">
+            <ToggleSwitch v-model="startOnBoot" aria-label="Start on boot" />
+          </SettingRow>
 
-            <template v-if="desktop">
-              <SettingRow label="Show tray icon">
-                <ToggleSwitch v-model="trayEnabled" aria-label="Show tray icon" />
-              </SettingRow>
-              <SettingRow
-                label="Minimize on close"
-                :hint="trayEnabled ? undefined : '&quot;Show tray icon&quot; must be enabled'"
-                :disabled="!trayEnabled"
-              >
-                <ToggleSwitch v-model="minimizeOnClose" :disabled="!trayEnabled" aria-label="Minimize on close" />
-              </SettingRow>
-            </template>
-          </SettingsGroup>
-        </template>
+          <template v-if="desktop">
+            <SettingRow label="Show tray icon">
+              <ToggleSwitch v-model="trayEnabled" aria-label="Show tray icon" />
+            </SettingRow>
+            <SettingRow
+              label="Minimize on close"
+              :hint="trayEnabled ? undefined : '&quot;Show tray icon&quot; must be enabled'"
+              :disabled="!trayEnabled"
+            >
+              <ToggleSwitch v-model="minimizeOnClose" :disabled="!trayEnabled" aria-label="Minimize on close" />
+            </SettingRow>
+          </template>
+        </SettingsGroup>
 
-        <!-- Remote -->
-        <template v-else-if="section === 'remote'">
-          <SettingsGroup title="Display">
-            <SettingRow label="Show macro labels">
-              <ToggleSwitch v-model="showRemoteLabels" aria-label="Show macro labels" />
-            </SettingRow>
-            <SettingRow label="Hide blank buttons">
-              <ToggleSwitch v-model="hideBlankButtons" aria-label="Hide blank buttons" />
-            </SettingRow>
-            <SettingRow label="Attempt to Fullscreen">
-              <ToggleSwitch v-model="attemptFullscreen" aria-label="Attempt to Fullscreen" />
-            </SettingRow>
-          </SettingsGroup>
+        <!-- Shown only on the local editor: the one the master accepts regenerate-token from
+               and the only one it tells the token to. -->
+        <SettingsGroup v-if="hostToken" title="Pairing">
+          <SettingRow
+            label="Pairing token"
+            hint="Phones you have paired hold this token. Regenerating it disconnects them, and each has to scan the QR code on the Connect page again."
+          >
+            <button class="danger-btn" @click="regenerateToken">Regenerate</button>
+          </SettingRow>
+          <p v-if="regenerated" class="regen-note">
+            New token generated. Paired devices have been disconnected — re-pair them from the Connect page.
+          </p>
+        </SettingsGroup>
+      </template>
 
-          <SettingsGroup title="Interaction">
-            <SettingRow label="Button haptics">
-              <ToggleSwitch v-model="buttonHaptics" aria-label="Button haptics" />
-            </SettingRow>
-            <SettingRow label="Swipe to change screens">
-              <ToggleSwitch v-model="swipeToChangeScreens" aria-label="Swipe to change screens" />
-            </SettingRow>
-          </SettingsGroup>
-        </template>
+      <!-- Remote -->
+      <template v-else-if="section === 'remote'">
+        <SettingsGroup title="Display">
+          <SettingRow label="Show macro labels">
+            <ToggleSwitch v-model="showRemoteLabels" aria-label="Show macro labels" />
+          </SettingRow>
+          <SettingRow label="Hide blank buttons">
+            <ToggleSwitch v-model="hideBlankButtons" aria-label="Hide blank buttons" />
+          </SettingRow>
+          <SettingRow label="Attempt to Fullscreen">
+            <ToggleSwitch v-model="attemptFullscreen" aria-label="Attempt to Fullscreen" />
+          </SettingRow>
+        </SettingsGroup>
 
-        <!-- Defaults -->
-        <template v-else>
-          <SettingsGroup title="Screen">
-            <SettingRow label="Background color">
-              <ColorInput v-model="screenBgHex" label="Default screen background color" />
-            </SettingRow>
-            <SettingRow label="Grid size">
-              <GridSizeInput :size="screenSize" @resize="screenSize = $event" />
-            </SettingRow>
-          </SettingsGroup>
+        <SettingsGroup title="Interaction">
+          <SettingRow label="Button haptics">
+            <ToggleSwitch v-model="buttonHaptics" aria-label="Button haptics" />
+          </SettingRow>
+          <SettingRow label="Swipe to change screens">
+            <ToggleSwitch v-model="swipeToChangeScreens" aria-label="Swipe to change screens" />
+          </SettingRow>
+        </SettingsGroup>
+      </template>
 
-          <SettingsGroup title="Macro">
-            <SettingRow label="Icon color">
-              <ColorInput v-model="macroIconHex" label="Default macro icon color" />
-            </SettingRow>
-            <SettingRow label="Background color">
-              <ColorInput v-model="macroBgHex" label="Default macro background color" />
-            </SettingRow>
-          </SettingsGroup>
-        </template>
+      <!-- Defaults -->
+      <template v-else>
+        <SettingsGroup title="Screen">
+          <SettingRow label="Background color">
+            <ColorInput v-model="screenBgHex" label="Default screen background color" />
+          </SettingRow>
+          <SettingRow label="Grid size">
+            <GridSizeInput :size="screenSize" @resize="screenSize = $event" />
+          </SettingRow>
+        </SettingsGroup>
+
+        <SettingsGroup title="Macro">
+          <SettingRow label="Icon color">
+            <ColorInput v-model="macroIconHex" label="Default macro icon color" />
+          </SettingRow>
+          <SettingRow label="Background color">
+            <ColorInput v-model="macroBgHex" label="Default macro background color" />
+          </SettingRow>
+        </SettingsGroup>
+      </template>
     </div>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useMacroStore } from '~/stores/macro'
+import { usePairingToken } from '~/composables/usePairingToken'
 import { useTheme } from '~/composables/useTheme'
+import { useWebSocket } from '~/composables/useWebSocket'
 import { colorFromHex, colorToHex } from '~/../shared/types'
 import type { MacroSettings } from '~/../shared/types'
 import ColorInput from '~/components/input/colorInput.vue'
@@ -119,6 +135,27 @@ const section = ref<(typeof sections)[number]['id']>('editor')
 const currentLabel = computed(() => sections.find((s) => s.id === section.value)?.label)
 
 const { isDark, toggle: toggleTheme } = useTheme()
+
+// --- Pairing: sent on the socket rather than through the store, because it
+// rotates a credential on the master and is not an edit to the state the store owns.
+const { hostToken } = usePairingToken()
+const ws = useWebSocket()
+const regenerated = ref(false)
+
+function regenerateToken() {
+  const ok = confirm(
+    'Regenerate the pairing token?\n\nEvery paired device will be disconnected and has to scan the QR code again.',
+  )
+  if (!ok) return
+  ws.send({ type: 'regenerate-token' })
+}
+
+// Confirmation comes from the master's reply, not from the click: the new token
+// is what proves the regeneration actually happened. A first value is the
+// snapshot arriving, which is not one.
+watch(hostToken, (next, previous) => {
+  if (previous) regenerated.value = true
+})
 
 // --- Settings: every control saves as soon as it changes ---
 const store = useMacroStore()
@@ -203,5 +240,27 @@ const minimizeOnClose = desktopSetting('minimizeOnClose')
   font-weight: 700;
   margin-bottom: var(--space-6);
   color: var(--color-ink);
+}
+
+.danger-btn {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+  }
+}
+
+.regen-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
 }
 </style>

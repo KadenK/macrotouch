@@ -6,6 +6,10 @@
         <p class="subtitle">
           Open the URL on your touch device's browser or scan the QR code to pair with this computer.
         </p>
+        <p v-if="hostToken" class="subtitle note">
+          The link carries this computer's pairing token — treat it as a password, and regenerate it from Settings if
+          you ever share it by mistake.
+        </p>
       </header>
 
       <div v-if="loading" class="card status-card">
@@ -60,7 +64,7 @@
 import { ref } from 'vue'
 import { useNetwork } from '../composables/getIPAddresses'
 
-const { networkInterfaces, qrCodes, loading, error } = useNetwork()
+const { networkInterfaces, qrCodes, hostToken, loading, error } = useNetwork()
 
 const selectedIndex = ref(0)
 </script>
@@ -89,6 +93,10 @@ const selectedIndex = ref(0)
   font-size: var(--text-lg);
   color: var(--color-muted);
   margin-top: var(--space-2);
+}
+
+.note {
+  font-size: var(--text-sm);
 }
 
 .status-card {
