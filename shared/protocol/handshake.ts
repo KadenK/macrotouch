@@ -51,9 +51,9 @@ export type ProtocolRole = Hello['role']
  * The master's reply to a client `hello`: everything that client needs before
  * it can render.
  *
- * `catalogs` and `pairingToken` are sent to editors only. `actionState` arrives
- * with live action state (Demo 2) and is omitted until something produces it —
- * an absent field means "not available", an empty one would mean "nothing to
+ * `catalogs` and `pairingToken` are sent to editors only. `actionState` is sent
+ * to controllers, and omitted while no Action Server could produce it — an
+ * absent field means "not available", an empty one would mean "nothing to
  * show", and those are different. An action server usually registers after an
  * editor connects, so editors also get {@link CatalogsMessage} when the set of
  * nodes changes.
@@ -70,7 +70,10 @@ export interface Snapshot {
    * had to present a token to get here already knows it.
    */
   pairingToken?: string
-  /** Controller only. Demo 2. */
+  /**
+   * Controller only. The latest reading of each watched action — one on a
+   * screen some controller is viewing. Absent while no Action Server is connected.
+   */
   actionState?: Record<ActionStateKey, ActionStateEntry>
 }
 

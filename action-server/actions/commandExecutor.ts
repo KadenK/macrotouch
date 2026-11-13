@@ -2,7 +2,8 @@ import { getDefaultShell } from '../../shared/platform'
 
 const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
 
-export async function executeCommand(command: string): Promise<void> {
+/** Run a shell command. Resolves with its stdout. */
+export async function executeCommand(command: string): Promise<string> {
   if (!isNode) {
     throw new Error('executeCommand is only available in a Node/Electron environment')
   }
@@ -16,7 +17,7 @@ export async function executeCommand(command: string): Promise<void> {
         reject({ error, stdout, stderr })
         return
       }
-      resolve()
+      resolve(stdout)
     })
   })
 }

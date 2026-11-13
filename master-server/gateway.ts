@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws'
 import type { Macro } from '../shared/types'
 import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../shared/protocol'
 import { PROTOCOL_VERSION } from '../shared/protocol'
+import { ActionStateHub } from './action-state'
 import { ActionRouter } from './action-router'
 import { NodeRegistry } from './node-registry'
 import { isLoopback, type PairingToken } from './pairing'
@@ -28,7 +29,7 @@ export type WebSocketConnection = {
 type Client = {
   socket: WebSocketConnection
   role: ProtocolRole | null
-  /** Recorded for Demo 2 watch tracking. Unused here. */
+  /** The screen a controller is showing, which decides the actions watched for it. */
   viewedScreenId: string | null
   /** From this computer, so exempt from the pairing token and allowed to quit. */
   fromLoopback: boolean
@@ -74,6 +75,21 @@ export function startGateway(port: number, options: GatewayOptions) {
   const clients = new Map<WebSocketConnection, Client>()
   let isShuttingDown = false
 
+  const actionState = new ActionStateHub(
+    nodes,
+    () => store.getState(),
+    function* viewedScreens() {
+      for (const { role, viewedScreenId } of clients.values()) {
+        if (role === 'controller' && viewedScreenId) yield viewedScreenId
+      }
+    },
+    (msg) => {
+      for (const { socket, role } of clients.values()) {
+        if (role === 'controller') send(socket, msg)
+      }
+    },
+  )
+
   const send = (socket: WebSocketConnection, msg: MasterToClientMessage) => {
     if (socket.readyState === 1) socket.send(JSON.stringify(msg))
   }
@@ -94,6 +110,7 @@ export function startGateway(port: number, options: GatewayOptions) {
     for (const { socket, role } of clients.values()) {
       if (role === 'editor') send(socket, { type: 'catalogs', catalogs: nodes.catalogs() })
     }
+    actionState.recompute()
   })
 
   /**
@@ -202,9 +219,8 @@ export function startGateway(port: number, options: GatewayOptions) {
         client.role = msg.role
         if (msg.role === 'controller' && msg.screenId) client.viewedScreenId = msg.screenId
 
-        // Action state is not included yet; an absent field means there is no
-        // producer, which differs from an empty one.
         const isLocalEditor = msg.role === 'editor' && fromLoopback
+        const cachedState = msg.role === 'controller' ? actionState.snapshot() : undefined
         send(socket, {
           type: 'snapshot',
           protocolVersion: PROTOCOL_VERSION,
@@ -212,7 +228,10 @@ export function startGateway(port: number, options: GatewayOptions) {
           ...(msg.role === 'editor' ? { catalogs: nodes.catalogs() } : {}),
           // The connect page needs the token to build the URL it advertises.
           ...(isLocalEditor ? { pairingToken: pairing.value } : {}),
+          // Absent, not empty, when no node is connected to produce any.
+          ...(cachedState ? { actionState: cachedState } : {}),
         })
+        if (client.viewedScreenId) actionState.recompute()
         return
       }
 
@@ -229,7 +248,8 @@ export function startGateway(port: number, options: GatewayOptions) {
       }
 
       if (msg.type === 'action-state') {
-        sendError(socket, { code: 'invalid-message', message: 'action-state is not supported' })
+        if (client.role === 'node') actionState.ingest(socket, msg.states)
+        else sendError(socket, { code: 'invalid-message', message: 'action-state requires a node connection' })
         return
       }
 
@@ -249,8 +269,8 @@ export function startGateway(port: number, options: GatewayOptions) {
       }
 
       if (msg.type === 'view-screen') {
-        // Recorded only. The watch tracker that consumes this is Demo 2.
         client.viewedScreenId = msg.screenId
+        actionState.recompute()
         return
       }
 
@@ -281,12 +301,15 @@ export function startGateway(port: number, options: GatewayOptions) {
         }
         stateFile.save(store.getState())
         broadcast(result)
+        // The edit may have bound, unbound or moved a stateful macro on a viewed screen.
+        actionState.recompute()
       }
     })
 
     socket.on('close', () => {
       nodes.remove(socket)
       clients.delete(socket)
+      if (client.role === 'controller' && client.viewedScreenId) actionState.recompute()
       console.log('WebSocket client disconnected')
     })
   })

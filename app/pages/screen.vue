@@ -298,7 +298,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   removeFullscreenChangeListener?.()
+  store.setViewedScreen(null)
 })
+
+// Tells the master which screen's stateful actions to watch.
+watch(currentScreenId, (id) => store.setViewedScreen(id || null), { immediate: true })
 
 watch(screenList, (list) => {
   if (!currentScreenId.value && list.length) {

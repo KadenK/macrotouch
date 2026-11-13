@@ -1,5 +1,5 @@
 import type { OSPlatform } from '../platform'
-import type { Action } from './action'
+import type { Action, ActionStateInfo } from './action'
 
 /** Identifies one Action Server process. Assigned by the node, stable for its lifetime. */
 export type NodeId = string
@@ -7,10 +7,10 @@ export type NodeId = string
 /**
  * One action as it crosses a process boundary.
  *
- * This is {@link Action} without `execute`: the catalog travels from the Action
- * Server to the master and on to the editor, so it can only carry data.
+ * This is {@link Action} without its functions: the catalog travels from the
+ * Action Server to the master and on to the editor, so it can only carry data.
  */
-export type ActionDescriptor = Omit<Action, 'execute'>
+export type ActionDescriptor = Omit<Action, 'execute' | 'states'> & { states?: ActionStateInfo[] }
 
 /** A named group of actions, as the Action Server presents them to the editor. */
 export interface ActionGroup {

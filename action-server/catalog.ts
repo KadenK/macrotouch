@@ -12,6 +12,12 @@ export function toCatalog(): ActionCatalog {
       type: field.type,
       ...(field.options ? { options: [...field.options] } : {}),
     })),
+    ...(action.states
+      ? {
+          // Only the data; `get` stays behind.
+          states: action.states.map(({ get: _get, ...info }) => structuredClone(info)),
+        }
+      : {}),
   }))
   return { groups: [{ id: 'builtin', label: 'Built-in', actions: descriptors }] }
 }

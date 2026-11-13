@@ -45,8 +45,8 @@ export type ActionResult = {
 /**
  * Controller to master: this screen is now in view.
  *
- * Demo 2 — the master uses it to work out which actions need watching. Nothing
- * in Demo 1 sends it.
+ * The master uses it to work out which actions need watching. Sent again after
+ * every snapshot, since a reconnect wipes the master's record.
  */
 export interface ViewScreen {
   type: 'view-screen'
@@ -57,8 +57,8 @@ export interface ViewScreen {
 /**
  * Master to node: report on exactly these actions, and no others.
  *
- * The list replaces whatever the node was watching before. Demo 2 — nothing in
- * Demo 1 sends it.
+ * The list replaces whatever the node was watching before. Sent only when the
+ * list changes.
  */
 export interface WatchActions {
   type: 'watch-actions'
@@ -68,8 +68,8 @@ export interface WatchActions {
 /**
  * Node to master, then master to the controllers watching.
  *
- * Only readings that changed, or that were just added to the watched set. Demo
- * 2 — nothing in Demo 1 sends it.
+ * Only readings that changed, or that were just added to the watched set. The
+ * master forwards every reading to every controller.
  */
 export interface ActionStateMessage {
   type: 'action-state'

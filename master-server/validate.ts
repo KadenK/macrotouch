@@ -120,6 +120,11 @@ export function parseClientMessage(
         return fail('action-result requires requestId and ok')
       }
       return parsed as unknown as NodeToMasterMessage
+    case 'action-state':
+      if (!Array.isArray(parsed.states) || !parsed.states.every((e) => isObj(e) && isStr(e.key))) {
+        return fail('action-state requires states, each with a key')
+      }
+      return parsed as unknown as NodeToMasterMessage
     case 'macro-trigger':
       if (!isStr(parsed.requestId)) return fail('macro-trigger requires requestId')
       if (!isStr(parsed.macroId)) return fail('macro-trigger requires macroId')
