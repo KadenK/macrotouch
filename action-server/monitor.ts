@@ -3,6 +3,12 @@ import { findActionState } from '../shared/types/action'
 import { actions } from './action-map'
 
 const POLL_INTERVAL_MS = 1000
+/**
+ * Extra reads after an action runs, as gaps between them. Some effects land a
+ * moment after the command returns — a media player takes a beat to report it
+ * has paused — so one read straight away can still see the old value.
+ */
+const AFTER_RUN_READS_MS = [100, 200, 300, 400]
 
 /**
  * Polls the actions the master asked about and reports the readings that changed.
@@ -17,6 +23,8 @@ export class StateMonitor {
   private timer: ReturnType<typeof setTimeout> | null = null
   private polling: Promise<void> | null = null
   private stopped = false
+  /** Gaps still to wait between the quick reads that follow a run, before normal polling resumes. */
+  private quickReads: number[] = []
 
   constructor(
     private readonly nodeId: NodeId,
@@ -31,9 +39,14 @@ export class StateMonitor {
     this.schedule(0)
   }
 
-  /** Read every watched instance of `actionId` now, e.g. right after it ran. */
+  /**
+   * Read every watched action now and a few times shortly after, e.g. right
+   * after `actionId` ran, so its effect shows without waiting for the next poll.
+   */
   refresh(actionId: string): void {
-    if ([...this.watched.values()].some((w) => w.actionId === actionId)) this.schedule(0)
+    if (![...this.watched.values()].some((w) => w.actionId === actionId)) return
+    this.quickReads = [...AFTER_RUN_READS_MS]
+    this.schedule(0)
   }
 
   stop(): void {
@@ -64,7 +77,7 @@ export class StateMonitor {
     } finally {
       this.polling = null
     }
-    if (!this.timer) this.schedule(POLL_INTERVAL_MS)
+    if (!this.timer) this.schedule(this.quickReads.shift() ?? POLL_INTERVAL_MS)
   }
 
   private async readAll(): Promise<void> {

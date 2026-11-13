@@ -30,7 +30,7 @@
           :is="settingsPanel"
           :key="editorKey"
           v-model:look="look"
-          v-model:state-appearance="stateAppearance"
+          v-model:state-appearance="panelStateAppearance"
           :state="actionState"
         />
       </section>
@@ -53,7 +53,7 @@ import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
 import type { Macro, Position } from '~/../shared/types'
-import { createColor, findActionState } from '~/../shared/types'
+import { ActionType, actionStateKey, createColor, findActionState } from '~/../shared/types'
 import { IconSource } from '~/../shared/types/macro'
 import { uuid } from '~/../shared/uuid'
 import { useMacroKind, type MacroLook, type StateAppearance } from '~/composables/useMacroKind'
@@ -109,6 +109,20 @@ const look = ref<MacroLook>({
   backgroundColor: createColor(255, 255, 255),
 })
 const stateAppearance = ref<StateAppearance | undefined>()
+/**
+ * The action and parameters `stateAppearance` was made for. A panel for any
+ * other choice starts from its own defaults, rather than reading another
+ * state's looks (Mute's icons) as customisations of its own.
+ */
+const appearanceOwner = ref('')
+const currentOwner = computed(() => actionStateKey(selectedActionId.value, actionParameters.value))
+const panelStateAppearance = computed({
+  get: () => (appearanceOwner.value === currentOwner.value ? stateAppearance.value : undefined),
+  set: (value) => {
+    stateAppearance.value = value
+    appearanceOwner.value = currentOwner.value
+  },
+})
 
 watch(isOpen, (open) => {
   if (!open) return
@@ -125,6 +139,7 @@ watch(isOpen, (open) => {
     stateAppearance.value = macro.value.stateAppearance
       ? JSON.parse(JSON.stringify(macro.value.stateAppearance))
       : undefined
+    appearanceOwner.value = actionStateKey(macro.value.actionId ?? '', macro.value.parameters)
     selectedActionId.value = macro.value.actionId ?? ''
     actionParameters.value = macro.value.parameters ? { ...macro.value.parameters } : {}
   } else {
@@ -136,6 +151,7 @@ watch(isOpen, (open) => {
       backgroundColor: screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255),
     }
     stateAppearance.value = undefined
+    appearanceOwner.value = ''
     selectedActionId.value = store.actions[0]?.actionId ?? ''
     actionParameters.value = {}
   }
@@ -149,7 +165,13 @@ watch(
     if (selectedAction) {
       const freshParams: Record<string, unknown> = {}
       for (const field of selectedAction.actionFields) {
-        freshParams[field.key] = actionParameters.value[field.key] ?? ''
+        const current = actionParameters.value[field.key]
+        // A dropdown shows its first option when nothing is chosen, so that is the value it starts with.
+        if (field.type === ActionType.Enum && field.options?.length) {
+          freshParams[field.key] = field.options.includes(current as string) ? current : field.options[0]
+        } else {
+          freshParams[field.key] = current ?? ''
+        }
       }
       actionParameters.value = freshParams
     } else if (!newActionId) {
@@ -183,7 +205,7 @@ function saveMacro() {
     ...look.value,
   }
   // An action missing from the catalog (its node is offline) keeps its saved look and widget.
-  const appearance = selectedAction.value ? stateAppearance.value : macro.value?.stateAppearance
+  const appearance = selectedAction.value ? panelStateAppearance.value : macro.value?.stateAppearance
   const stateKind = selectedAction.value ? actionState.value?.kind : macro.value?.stateKind
   if (appearance) updatedMacro.stateAppearance = appearance
   if (stateKind) updatedMacro.stateKind = stateKind
