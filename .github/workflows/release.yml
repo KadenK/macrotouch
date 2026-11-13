@@ -3,10 +3,11 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
-      draft_release:
-        description: Create a draft GitHub release with the built packages
-        type: boolean
-        default: false
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 permissions:
   contents: read
@@ -15,11 +16,36 @@ env:
   CSC_IDENTITY_AUTO_DISCOVERY: 'false' # packages are unsigned for now
 
 jobs:
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+      version: ${{ steps.push.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bump, commit and push
+        id: push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          version=$(npm version "${{ inputs.bump }}" --no-git-tag-version | sed 's/^v//')
+          git commit -am "Release v${version}"
+          git push
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   linux-windows:
     name: Linux + Windows packages
+    needs: bump
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -54,9 +80,12 @@ jobs:
 
   macos:
     name: macOS packages
+    needs: bump
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump.outputs.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -80,8 +109,7 @@ jobs:
 
   release:
     name: Draft release
-    if: inputs.draft_release
-    needs: [linux-windows, macos]
+    needs: [bump, linux-windows, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -97,8 +125,8 @@ jobs:
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.bump.outputs.version }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          gh release create "v${version}" packages/* \
-            --draft --title "v${version}" --generate-notes \
-            --target "${{ github.sha }}"
+          gh release create "v${VERSION}" packages/* \
+            --draft --title "v${VERSION}" --generate-notes \
+            --target "${{ needs.bump.outputs.sha }}"
