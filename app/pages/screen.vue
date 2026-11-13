@@ -46,6 +46,16 @@ definePageMeta({
 const store = useMacroStore()
 const { settings } = storeToRefs(store)
 
+/**
+ * The desktop MacroPad window opens this page with `?desktop=1`.
+ *
+ * Fullscreen is for a phone, where the browser chrome is wasted space. In a
+ * window on the computer it would swallow the whole display and hide the
+ * editor the user was working in, so that setting is ignored there.
+ */
+const route = useRoute()
+const inDesktopWindow = computed(() => route.query.desktop === '1')
+
 const currentScreenId = ref('')
 const screenList = computed(() => store.getScreenList())
 const pageBackground = computed(() => {
@@ -277,7 +287,7 @@ onMounted(() => {
     document.removeEventListener('fullscreenchange', onFullscreenChange)
   }
 
-  if (settings.value.attemptFullscreen) {
+  if (settings.value.attemptFullscreen && !inDesktopWindow.value) {
     tryEnterFullscreen().then((entered) => {
       if (!entered) {
         requestFullscreenOnGesture()

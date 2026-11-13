@@ -60,6 +60,9 @@ model {
     electron -> editor 'shows' {
       technology 'BrowserWindow'
     }
+    electron -> controller 'shows the MacroPad window on this computer' {
+      technology 'BrowserWindow'
+    }
     electron -[call]-> desktopSettings 'reads/writes' {
       technology 'fs'
     }
