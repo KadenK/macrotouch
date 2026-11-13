@@ -387,16 +387,17 @@ await check('SE-05/SE-02', 'rows/columns clamp to 1..20 on save, then it navigat
   const cols = await win.locator('.grid-input').nth(1).inputValue()
   assert(rows === '20' && cols === '1', `clamped to ${rows}x${cols}, expected 20x1`)
 })
-await check('SE-10', 'the four decorative toggles do not persist', async () => {
-  const boxes = win.locator('.setting-row input[type=checkbox]')
-  await win.locator('.setting-row .switch').nth(0).click()
-  assert(await boxes.nth(0).isChecked(), 'clicking the switch did not tick the box')
+await check('SE-10', 'the decorative toggles do not persist', async () => {
+  // Addressed by label. Start on boot is deliberately not exercised: it writes a
+  // real OS login item, and this run does not isolate Electron's userData.
+  const box = () => win.locator('.setting-row', { hasText: 'Button haptics' }).locator('input[type=checkbox]')
+  await win.locator('.setting-row', { hasText: 'Button haptics' }).locator('.switch').click()
+  assert(await box().isChecked(), 'clicking the switch did not tick the box')
   await win.locator('.save-btn').click()
   await until(async () => win.url().endsWith('/home'), 'save did not navigate')
   await win.locator('.input-button', { hasText: 'Settings' }).click()
   await win.waitForSelector('.settings-page')
-  const still = await win.locator('.setting-row input[type=checkbox]').nth(0).isChecked()
-  assert(!still, 'Start on boot persisted — it is documented as inert')
+  assert(!(await box().isChecked()), 'Button haptics persisted — it is documented as inert')
 })
 await check('SE-08', 'Swipe to change screens persists', async () => {
   // Addressed by label, not position: the tray work inserted a row into General

@@ -23,11 +23,10 @@
         </SettingsGroup>
 
         <SettingsGroup title="System">
-          <SettingRow label="Start on boot">
-            <ToggleSwitch v-model="startOnBoot" aria-label="Start on boot" />
-          </SettingRow>
-
           <template v-if="desktop">
+            <SettingRow label="Start on boot">
+              <ToggleSwitch v-model="startOnBoot" aria-label="Start on boot" />
+            </SettingRow>
             <SettingRow label="Show tray icon">
               <ToggleSwitch v-model="trayEnabled" aria-label="Show tray icon" />
             </SettingRow>
@@ -188,11 +187,10 @@ const macroBgHex = colorSetting('defaultMacroBackgroundColor')
 const screenSize = setting('defaultScreenSize')
 
 // Not wired up yet.
-const startOnBoot = ref(false)
 const buttonHaptics = ref(false)
 
 // --- Desktop app settings (only present inside Electron) ---
-type DesktopSettings = { trayEnabled: boolean; minimizeOnClose: boolean }
+type DesktopSettings = { trayEnabled: boolean; minimizeOnClose: boolean; startOnBoot: boolean }
 type DesktopSettingsAPI = {
   getDesktopSettings: () => Promise<DesktopSettings>
   updateDesktopSettings: (patch: Partial<DesktopSettings>) => Promise<DesktopSettings>
@@ -220,6 +218,7 @@ function desktopSetting<K extends keyof DesktopSettings>(key: K) {
 
 const trayEnabled = desktopSetting('trayEnabled')
 const minimizeOnClose = desktopSetting('minimizeOnClose')
+const startOnBoot = desktopSetting('startOnBoot')
 </script>
 
 <style scoped>

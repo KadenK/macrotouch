@@ -27,7 +27,7 @@ let trayStatus = null
 let trayRefreshTimer = null
 // Settings for this desktop app only, so unlike the master's they are known before
 // the master starts and do not sync to other devices.
-const DESKTOP_SETTINGS_DEFAULTS = { trayEnabled: true, minimizeOnClose: true }
+const DESKTOP_SETTINGS_DEFAULTS = { trayEnabled: true, minimizeOnClose: true, startOnBoot: false }
 const desktopSettingsPath = () => path.join(app.getPath('userData'), 'desktop-settings.json')
 let desktopSettings = { ...DESKTOP_SETTINGS_DEFAULTS }
 
@@ -49,7 +49,62 @@ function updateDesktopSettings(patch) {
   }
   if (desktopSettings.trayEnabled) createTray()
   else destroyTray()
+  if ('startOnBoot' in patch) applyStartOnBoot(desktopSettings.startOnBoot)
   return desktopSettings
+}
+
+// Flag the OS passes when it launches us at login, so we can start in the tray.
+const BOOT_FLAG = '--hidden'
+const linuxAutostartPath = () =>
+  path.join(process.env.XDG_CONFIG_HOME || path.join(app.getPath('home'), '.config'), 'autostart', 'macrotouch.desktop')
+
+/** Command that relaunches this app: the AppImage if there is one, else the binary. */
+function launchCommand() {
+  const exe = (process.platform === 'linux' && process.env.APPIMAGE) || process.execPath
+  if (app.isPackaged) return [exe]
+  // Unpackaged (dev). Windows stores args as one string, so quote the path there.
+  return [exe, process.platform === 'win32' ? `"${app.getAppPath()}"` : app.getAppPath()]
+}
+
+/** Registers or removes the login item. Electron has no Linux support, so write the XDG entry. */
+function applyStartOnBoot(enabled) {
+  try {
+    if (process.platform === 'linux') {
+      const file = linuxAutostartPath()
+      if (!enabled) return fs.rmSync(file, { force: true })
+      const quote = (arg) => `"${arg.replace(/(["\\$`])/g, '\\$1')}"`
+      fs.mkdirSync(path.dirname(file), { recursive: true })
+      fs.writeFileSync(
+        file,
+        [
+          '[Desktop Entry]',
+          'Type=Application',
+          'Name=MacroTouch',
+          `Exec=${[...launchCommand(), BOOT_FLAG].map(quote).join(' ')}`,
+          'X-GNOME-Autostart-enabled=true',
+          '',
+        ].join('\n'),
+      )
+    } else {
+      const [exe, ...args] = launchCommand()
+      app.setLoginItemSettings({ openAtLogin: enabled, path: exe, args: [...args, BOOT_FLAG] })
+    }
+  } catch (err) {
+    console.error('Failed to update start on boot:', err)
+  }
+}
+
+/** Whether the OS has the login item, so a removed/moved entry shows as off. */
+function startOnBootRegistered() {
+  if (process.platform === 'linux') return fs.existsSync(linuxAutostartPath())
+  // Windows matches the entry by path and args, so pass the ones we registered.
+  const [exe, ...args] = launchCommand()
+  return app.getLoginItemSettings({ path: exe, args: [...args, BOOT_FLAG] }).openAtLogin
+}
+
+/** Whether the OS launched us at login. macOS 13+ ignores our args, so ask it instead. */
+function startedAtLogin() {
+  return process.argv.includes(BOOT_FLAG) || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin)
 }
 
 // Where the master server lives. Mirrors DEFAULT_MASTER in shared/websocket.ts
@@ -176,7 +231,7 @@ function showWindow(route) {
   mainWindow.focus()
 }
 
-function createWindow(route = '/home') {
+function createWindow(route = '/home', { show = true } = {}) {
   // Calculate window size relative to screen size
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
@@ -189,6 +244,7 @@ function createWindow(route = '/home') {
     minWidth: 800,
     minHeight: 600,
     icon: appIcon,
+    show,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -298,6 +354,7 @@ app.whenReady().then(async () => {
   }
 
   loadDesktopSettings()
+  desktopSettings.startOnBoot = startOnBootRegistered()
   // Before the master starts, so the tray still shows when it fails to.
   if (desktopSettings.trayEnabled) createTray()
 
@@ -308,7 +365,8 @@ app.whenReady().then(async () => {
   }
   readMasterStatus().then(setTrayMenu)
 
-  createWindow()
+  // Started by the OS at login: stay in the tray (only if there is one to reach us by).
+  createWindow('/home', { show: !(startedAtLogin() && desktopSettings.trayEnabled) })
 
   // IPC handlers. Everything else goes to the master over the websocket.
   ipcMain.handle('settings:getDesktop', () => desktopSettings)
