@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 import type {
   ActionCatalog,
   ActionDescriptor,
+  ActionStateEntry,
+  ActionStateKey,
+  ActionStateValue,
   Color,
   Macro,
   MacroScreen,
@@ -14,7 +17,7 @@ import type {
 } from '~/../shared/types'
 import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
 import { uuid } from '~/../shared/uuid'
-import { createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
+import { actionStateKey, createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 
@@ -42,6 +45,32 @@ export const useMacroStore = defineStore('Macro', () => {
     catalogs.value = updated
   }
 
+  /** Latest live readings of stateful actions, from the master. Controllers only. */
+  const actionStates = ref<Record<ActionStateKey, ActionStateEntry>>({})
+
+  function applyActionState(states: ActionStateEntry[]) {
+    for (const entry of states) actionStates.value[entry.key] = entry
+  }
+
+  /** The live reading for a macro's action, if it has one. */
+  function getActionState(macro: Macro): ActionStateEntry | undefined {
+    if (!macro.actionId) return undefined
+    return actionStates.value[actionStateKey(macro.actionId, macro.parameters)]
+  }
+
+  /**
+   * The screen this controller is showing. The master watches the stateful
+   * actions on it, so it is re-sent after every snapshot: a reconnect wipes
+   * the master's record.
+   */
+  const viewedScreenId = ref<string | null>(null)
+
+  function setViewedScreen(screenId: string | null) {
+    if (viewedScreenId.value === screenId) return
+    viewedScreenId.value = screenId
+    if (isReady.value) sendFn.value?.({ type: 'view-screen', screenId })
+  }
+
   const sendFn = ref<((message: ClientToMasterMessage) => void) | null>(null)
 
   function setSendFn(fn: (message: ClientToMasterMessage) => void) {
@@ -54,10 +83,15 @@ export const useMacroStore = defineStore('Macro', () => {
     sendFn.value?.(message)
   }
 
-  function applySnapshot(state: MacroState, snapshotCatalogs?: Record<string, ActionCatalog>) {
+  function applySnapshot(
+    state: MacroState,
+    snapshotCatalogs?: Record<string, ActionCatalog>,
+    snapshotActionState?: Record<ActionStateKey, ActionStateEntry>,
+  ) {
     isApplyingRemoteState.value = true
 
     catalogs.value = snapshotCatalogs ?? {}
+    actionStates.value = snapshotActionState ? { ...snapshotActionState } : {}
 
     macros.value = state.macros || {}
     screens.value = {}
@@ -112,6 +146,7 @@ export const useMacroStore = defineStore('Macro', () => {
     // Ready on snapshot, not on socket open: a command sent before the
     // handshake completes would be clobbered by the snapshot that follows.
     isReady.value = true
+    if (viewedScreenId.value) sendFn.value?.({ type: 'view-screen', screenId: viewedScreenId.value })
   }
 
   /**
@@ -165,11 +200,12 @@ export const useMacroStore = defineStore('Macro', () => {
     send({ type: 'upsert-macro', macro: macros.value[macroId]! })
   }
 
-  function triggerMacro(macroId: string) {
+  /** Run a macro. `value` is for continuous controls such as a slider. */
+  function triggerMacro(macroId: string, value?: ActionStateValue) {
     if (!macros.value[macroId]) {
       console.warn(`Macro with id ${macroId} does not exist`)
     }
-    sendFn.value?.({ type: 'macro-trigger', requestId: uuid(), macroId })
+    sendFn.value?.({ type: 'macro-trigger', requestId: uuid(), macroId, ...(value === undefined ? {} : { value }) })
   }
 
   function _addMacro(macro: Macro) {
@@ -307,7 +343,11 @@ export const useMacroStore = defineStore('Macro', () => {
     screens,
     settings,
     actions,
+    actionStates,
     isReady,
+    getActionState,
+    applyActionState,
+    setViewedScreen,
     getMacro,
     updateMacro,
     addScreen,

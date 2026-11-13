@@ -1,7 +1,14 @@
 <template>
   <Teleport to="body">
-    <div v-if="isOpen" class="modal-overlay" @pointerdown.self="close">
+    <div
+      v-if="isOpen"
+      :class="['modal-overlay', { 'modal-overlay--held': heldTop !== null }]"
+      :style="heldTop !== null ? { paddingTop: `${heldTop}px` } : undefined"
+      @pointerdown.self="close"
+    >
       <div
+        ref="container"
+        :style="heldTop !== null ? { maxHeight: `calc(100vh - ${heldTop}px - 1rem)` } : undefined"
         :class="[
           'modal-container',
           {
@@ -34,8 +41,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-
 interface Props {
   modelValue: boolean
   title: string
@@ -43,6 +48,11 @@ interface Props {
   showBack?: boolean
   fixedSize?: boolean
   wide?: boolean
+  /**
+   * Open centred, then keep the top edge where it opened, so content that
+   * changes size grows downward instead of moving everything above it.
+   */
+  holdPosition?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -50,6 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
   showBack: false,
   fixedSize: false,
   wide: false,
+  holdPosition: false,
 })
 
 const emit = defineEmits<{
@@ -60,6 +71,22 @@ const isOpen = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 })
+
+const container = ref<HTMLElement | null>(null)
+/** Where the top edge settled when the modal opened, while `holdPosition` holds it there. */
+const heldTop = ref<number | null>(null)
+
+watch(
+  isOpen,
+  async (open) => {
+    heldTop.value = null
+    if (!open || !props.holdPosition) return
+    // Measured after the first centred render.
+    await nextTick()
+    if (isOpen.value && container.value) heldTop.value = container.value.getBoundingClientRect().top
+  },
+  { immediate: true },
+)
 
 const close = () => {
   isOpen.value = false
@@ -76,6 +103,10 @@ const close = () => {
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
+}
+
+.modal-overlay--held {
+  align-items: flex-start;
 }
 
 .modal-container {

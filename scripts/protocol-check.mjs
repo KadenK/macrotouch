@@ -269,16 +269,18 @@ async function main() {
     assert('macros' in snapshot.state && 'screens' in snapshot.state, 'state is missing macros/screens')
   })
 
-  await check('an editor snapshot carries catalogs; a controller snapshot carries neither extra', async () => {
+  await check('editor snapshots carry catalogs; controller snapshots carry action state', async () => {
     const editor = await connected('editor')
     assert(
       editor.snapshot.catalogs && typeof editor.snapshot.catalogs === 'object',
       'editor snapshot should include catalogs (empty when no node is connected)',
     )
-    assert(!('actionState' in editor.snapshot), 'actionState should be absent until Demo 2')
+    assert(!('actionState' in editor.snapshot), 'an editor snapshot should not include actionState')
     const controller = await connected('controller')
     assert(!('catalogs' in controller.snapshot), 'controller snapshot should not include catalogs')
-    assert(!('actionState' in controller.snapshot), 'actionState should be absent until Demo 2')
+    // Present (possibly empty) once an action server is connected to produce readings.
+    const { actionState } = controller.snapshot
+    assert(actionState === undefined || typeof actionState === 'object', 'controller actionState should be an object')
   })
 
   await check('editors are sent catalogs when a node registers and disconnects', async () => {
@@ -479,6 +481,76 @@ async function main() {
   })
 
   /* -- errors -------------------------------------------------------------- */
+  section('Live action state')
+
+  await check('a viewed stateful macro is watched, reported to controllers, and unwatched', async () => {
+    // A fake node with a uniquely named toggle action, so the real action
+    // server never claims it.
+    const actionId = uid('harnessToggle')
+    const node = await connect()
+    node.send({
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId: uid('node'),
+      label: 'Harness state node',
+      platform: 'linux',
+      catalog: {
+        groups: [
+          {
+            id: 'g',
+            label: 'G',
+            actions: [
+              {
+                actionId,
+                label: 'T',
+                actionFields: [],
+                states: [{ kind: 'toggle' }],
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    const { c: editor } = await connected('editor')
+    const screen = makeScreen(1, 1)
+    editor.send({ type: 'upsert-screen', screen })
+    await editor.next(isPatch)
+    const macro = {
+      ...makeMacro('Harness toggle'),
+      actionId,
+      parameters: {},
+    }
+    editor.send({
+      type: 'upsert-macro',
+      macro,
+      placement: { screenId: screen.id, position: { row: 0, column: 0 } },
+    })
+    await editor.next(isPatch)
+
+    const { c: controller } = await connected('controller')
+    controller.send({ type: 'view-screen', screenId: screen.id })
+    const watch = await node.next((m) => m.type === 'watch-actions' && m.actions.length > 0)
+    assert(watch.actions[0].actionId === actionId, `expected ${actionId} watched, got ${JSON.stringify(watch.actions)}`)
+    const key = watch.actions[0].key
+
+    node.send({
+      type: 'action-state',
+      states: [{ key, nodeId: 'n', value: true, updatedAt: Date.now() }],
+    })
+    const state = await controller.next((m) => m.type === 'action-state')
+    assert(state.states[0].key === key && state.states[0].value === true, 'the reading did not reach the controller')
+
+    const { snapshot: late } = await connected('controller')
+    assert(late.actionState?.[key]?.value === true, 'a later controller snapshot is missing the cached reading')
+
+    controller.send({ type: 'view-screen', screenId: null })
+    const unwatch = await node.next((m) => m.type === 'watch-actions')
+    assert(unwatch.actions.length === 0, `expected an empty watch list, got ${JSON.stringify(unwatch.actions)}`)
+    node.close()
+  })
+
   section('Errors')
 
   await check('malformed JSON is rejected and the socket stays open', async () => {

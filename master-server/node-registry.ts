@@ -1,5 +1,6 @@
 import type { NodeHello } from '../shared/protocol'
 import type { ActionCatalog, NodeId, NodeInfo } from '../shared/types/node'
+import { findActionState } from '../shared/types/action'
 
 export type NodeSocket = {
   readyState: number
@@ -32,6 +33,27 @@ export class NodeRegistry {
   getLocal(): { socket: NodeSocket; info: NodeInfo } | undefined {
     for (const [socket, { info }] of this.nodes) {
       if (socket.readyState === 1) return { socket, info }
+    }
+    return undefined
+  }
+
+  /** True while any node is registered. */
+  hasAny(): boolean {
+    return this.nodes.size > 0
+  }
+
+  sockets(): NodeSocket[] {
+    return [...this.nodes.keys()]
+  }
+
+  /** The first connected node that can report state for `actionId` run with `parameters`. */
+  findStateful(actionId: string, parameters?: Record<string, unknown>): NodeSocket | undefined {
+    for (const [socket, { catalog }] of this.nodes) {
+      if (socket.readyState !== 1) continue
+      const found = catalog.groups.some((group) =>
+        group.actions.some((action) => action.actionId === actionId && !!findActionState(action.states, parameters)),
+      )
+      if (found) return socket
     }
     return undefined
   }

@@ -15,8 +15,8 @@
   },
   "main": "electron/main.cjs",
   "scripts": {
-    "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch master-server/index.ts\"",
-    "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
+    "dev": "concurrently -k -n ui,master \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch --include action-server master-server/index.ts\"",
+    "dev:electron": "concurrently -k -n ui,master,electron \"cross-env MASTER_HTTP_PORT=4323 nuxt dev\" \"cross-env MACROTOUCH_HTTP_PORT=4323 MACROTOUCH_ACTION_ENTRY=action-server/index.ts tsx watch --include action-server master-server/index.ts\" \"wait-on http://localhost:4321 && cross-env NODE_ENV=development MACROTOUCH_HTTP_PORT=4323 electron .\"",
     "build": "npm run generate && npm run build:master && npm run build:action",
     "generate": "nuxt generate",
     "preview": "npm run start:master",

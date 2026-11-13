@@ -3,6 +3,7 @@ import { usePairingToken } from './usePairingToken'
 import { WEBSOCKET_PORT } from '../../shared/websocket'
 import { PROTOCOL_VERSION } from '../../shared/protocol'
 import type {
+  ActionStateMessage,
   CatalogsMessage,
   ClientToMasterMessage,
   MasterToClientMessage,
@@ -16,6 +17,7 @@ type WebSocketHandlers = {
   snapshot?: (snapshot: Snapshot) => void
   patch?: (patch: StatePatch) => void
   catalogs?: (catalogs: CatalogsMessage['catalogs']) => void
+  actionState?: (states: ActionStateMessage['states']) => void
   pairingToken?: (token: string) => void
   error?: (error: ProtocolError) => void
   open?: () => void
@@ -154,7 +156,9 @@ const createWebSocket = () => {
           }
           handlers.error?.(data.error)
           break
-        // action-state has no producer until MAC-14.
+        case 'action-state':
+          handlers.actionState?.(data.states)
+          break
       }
     }
 

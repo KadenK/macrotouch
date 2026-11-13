@@ -1,10 +1,10 @@
 <template>
-  <Modal v-model="isOpen" :title="modalTitle" :wide="true">
+  <Modal v-model="isOpen" :title="modalTitle" :wide="true" :hold-position="true">
     <div class="edit-form">
       <section class="edit-column">
         <div class="form-group">
           <label>Name</label>
-          <input v-model="editForm.name" type="text" class="text-input" placeholder="Macro name" />
+          <input v-model="name" type="text" class="text-input" placeholder="Macro name" />
         </div>
 
         <div class="form-group">
@@ -25,33 +25,14 @@
       </section>
 
       <section class="edit-column">
-        <div class="form-group">
-          <label>Icon</label>
-          <div class="icon-row">
-            <div class="icon-preview" :style="{ background: editForm.bgColorHex }" @click="openIconPicker">
-              <Icon
-                v-if="editForm.icon.source === 'LIBRARY'"
-                :name="normalizeIconValue(editForm.icon.value)"
-                class="preview-icon"
-                :style="{ color: colorToHex(editForm.iconColor) }"
-              />
-              <span v-else class="preview-placeholder">?</span>
-            </div>
-            <button class="small-btn" @click="openIconPicker">Choose Icon</button>
-          </div>
-        </div>
-
-        <div class="color-row">
-          <div class="form-group">
-            <label>Icon Color</label>
-            <ColorInput v-model="editForm.iconColorHex" />
-          </div>
-
-          <div class="form-group">
-            <label>Background Color</label>
-            <ColorInput v-model="editForm.bgColorHex" />
-          </div>
-        </div>
+        <!-- The right side depends on what the action reports live; see composables/useMacroKind.ts. -->
+        <component
+          :is="settingsPanel"
+          :key="editorKey"
+          v-model:look="look"
+          v-model:state-appearance="panelStateAppearance"
+          :state="actionState"
+        />
       </section>
     </div>
 
@@ -65,21 +46,17 @@
       </div>
     </template>
   </Modal>
-
-  <IconPickerModal v-model="isIconPickerOpen" @select="handleIconSelect" />
 </template>
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 import { useMacroStore } from '~/stores/macro'
 import Modal from '~/components/ui/Modal.vue'
-import ColorInput from '~/components/input/colorInput.vue'
-import IconPickerModal from '~/components/iconPicker/IconPickerModal.vue'
-import { normalizeIconValue } from '~/composables/useIconData'
-import type { Macro, Position, Icon } from '~/../shared/types'
-import { createColor, colorFromHex, colorToHex } from '~/../shared/types'
+import type { Macro, Position } from '~/../shared/types'
+import { ActionType, actionStateKey, createColor, findActionState } from '~/../shared/types'
 import { IconSource } from '~/../shared/types/macro'
 import { uuid } from '~/../shared/uuid'
+import { useMacroKind, type MacroLook, type StateAppearance } from '~/composables/useMacroKind'
 
 const props = defineProps<{
   modelValue: boolean
@@ -107,54 +84,76 @@ const isOpen = computed({
   set: (value: boolean) => emit('update:modelValue', value),
 })
 
-const isIconPickerOpen = ref(false)
-
 const selectedActionId = ref('')
 const actionParameters = ref<Record<string, unknown>>({})
 
-const selectedActionFields = computed(() => {
-  const selectedAction = store.actions.find((action) => action.actionId === selectedActionId.value)
-  return selectedAction?.actionFields ?? []
+const selectedAction = computed(() => store.actions.find((action) => action.actionId === selectedActionId.value))
+const selectedActionFields = computed(() => selectedAction.value?.actionFields ?? [])
+
+/** What the chosen action reports live with the chosen parameters, which picks the appearance editor. */
+const actionState = computed(() => findActionState(selectedAction.value?.states, actionParameters.value))
+const settingsPanel = computed(() => useMacroKind(actionState.value?.kind).settings)
+
+/** A new editor for each opening and each change of state, so it sets itself up from the macro afresh. */
+const openCount = ref(0)
+const editorKey = computed(() => {
+  const state = actionState.value
+  const which = state ? `${selectedActionId.value}:${state.kind}:${JSON.stringify(state.when ?? {})}` : 'none'
+  return `${openCount.value}:${which}`
 })
 
-const editForm = ref({
-  name: '',
-  icon: { source: IconSource.Library, value: 'baseline-home' } as Icon,
+const name = ref('')
+const look = ref<MacroLook>({
+  icon: { source: IconSource.Library, value: 'ic:baseline-home' },
   iconColor: createColor(0, 0, 0),
   backgroundColor: createColor(255, 255, 255),
-  iconColorHex: '#000000',
-  bgColorHex: '#ffffff',
+})
+const stateAppearance = ref<StateAppearance | undefined>()
+/**
+ * The action and parameters `stateAppearance` was made for. A panel for any
+ * other choice starts from its own defaults, rather than reading another
+ * state's looks (Mute's icons) as customisations of its own.
+ */
+const appearanceOwner = ref('')
+const currentOwner = computed(() => actionStateKey(selectedActionId.value, actionParameters.value))
+const panelStateAppearance = computed({
+  get: () => (appearanceOwner.value === currentOwner.value ? stateAppearance.value : undefined),
+  set: (value) => {
+    stateAppearance.value = value
+    appearanceOwner.value = currentOwner.value
+  },
 })
 
 watch(isOpen, (open) => {
   if (!open) return
+  openCount.value++
 
   if (macro.value) {
-    // editing existing macro: load its values
-    editForm.value = {
-      name: macro.value.name,
+    name.value = macro.value.name
+    look.value = {
       icon: { ...macro.value.icon },
       iconColor: macro.value.iconColor,
       backgroundColor: macro.value.backgroundColor,
-      iconColorHex: colorToHex(macro.value.iconColor),
-      bgColorHex: colorToHex(macro.value.backgroundColor),
     }
+    // Plain JSON, and a reactive store proxy cannot go through structuredClone.
+    stateAppearance.value = macro.value.stateAppearance
+      ? JSON.parse(JSON.stringify(macro.value.stateAppearance))
+      : undefined
+    appearanceOwner.value = actionStateKey(macro.value.actionId ?? '', macro.value.parameters)
     selectedActionId.value = macro.value.actionId ?? ''
     actionParameters.value = macro.value.parameters ? { ...macro.value.parameters } : {}
   } else {
+    name.value = 'New Macro'
+    // New macros start from the screen's default colors.
+    look.value = {
+      icon: { source: IconSource.Library, value: 'ic:baseline-home' },
+      iconColor: screen.value?.defaultMacroIconColor ?? createColor(0, 0, 0),
+      backgroundColor: screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255),
+    }
+    stateAppearance.value = undefined
+    appearanceOwner.value = ''
     selectedActionId.value = store.actions[0]?.actionId ?? ''
     actionParameters.value = {}
-    // new macro: use screen defaults if available
-    const defaultIconColor = screen.value?.defaultMacroIconColor ?? createColor(0, 0, 0)
-    const defaultBgColor = screen.value?.defaultMacroBackgroundColor ?? createColor(255, 255, 255)
-    editForm.value = {
-      name: 'New Macro',
-      icon: { source: 'LIBRARY', value: 'ic:baseline-home' } as Icon,
-      iconColor: defaultIconColor,
-      backgroundColor: defaultBgColor,
-      iconColorHex: colorToHex(defaultIconColor),
-      bgColorHex: colorToHex(defaultBgColor),
-    }
   }
 })
 
@@ -166,7 +165,13 @@ watch(
     if (selectedAction) {
       const freshParams: Record<string, unknown> = {}
       for (const field of selectedAction.actionFields) {
-        freshParams[field.key] = actionParameters.value[field.key] ?? ''
+        const current = actionParameters.value[field.key]
+        // A dropdown shows its first option when nothing is chosen, so that is the value it starts with.
+        if (field.type === ActionType.Enum && field.options?.length) {
+          freshParams[field.key] = field.options.includes(current as string) ? current : field.options[0]
+        } else {
+          freshParams[field.key] = current ?? ''
+        }
       }
       actionParameters.value = freshParams
     } else if (!newActionId) {
@@ -187,44 +192,23 @@ watch(
   },
 )
 
-watch(
-  () => editForm.value.iconColorHex,
-  (newHex) => {
-    editForm.value.iconColor = colorFromHex(newHex)
-  },
-)
-
-watch(
-  () => editForm.value.bgColorHex,
-  (newHex) => {
-    editForm.value.backgroundColor = colorFromHex(newHex)
-  },
-)
-
 function closeModal() {
   isOpen.value = false
 }
 
-function openIconPicker() {
-  isIconPickerOpen.value = true
-}
-
-function handleIconSelect(iconName: string) {
-  editForm.value.icon = { source: 'LIBRARY', value: iconName }
-  isIconPickerOpen.value = false
-}
-
 function saveMacro() {
-  const macroId = macro.value?.id || uuid()
   const updatedMacro: Macro = {
-    id: macroId,
-    name: editForm.value.name,
+    id: macro.value?.id || uuid(),
+    name: name.value,
     actionId: selectedActionId.value || undefined,
     parameters: actionParameters.value,
-    icon: editForm.value.icon,
-    iconColor: editForm.value.iconColor,
-    backgroundColor: editForm.value.backgroundColor,
+    ...look.value,
   }
+  // An action missing from the catalog (its node is offline) keeps its saved look and widget.
+  const appearance = selectedAction.value ? panelStateAppearance.value : macro.value?.stateAppearance
+  const stateKind = selectedAction.value ? actionState.value?.kind : macro.value?.stateKind
+  if (appearance) updatedMacro.stateAppearance = appearance
+  if (stateKind) updatedMacro.stateKind = stateKind
 
   if (macro.value) {
     store.updateMacro(updatedMacro)
@@ -245,53 +229,3 @@ function deleteMacro() {
   }
 }
 </script>
-
-<style scoped lang="postcss">
-.icon-preview {
-  width: 64px;
-  height: 64px;
-  border: var(--border-width) solid var(--color-input-border);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.preview-icon {
-  width: 48px;
-  height: 48px;
-  font-size: 48px;
-}
-
-.preview-placeholder {
-  font-size: 24px;
-  color: var(--color-text-faint);
-}
-
-.icon-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.color-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem 1.5rem;
-}
-
-.small-btn {
-  padding: 0.5rem;
-  width: 96px;
-  height: 32px;
-  background-color: var(--color-neutral);
-  color: var(--color-text-strong);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.75rem;
-  text-align: center;
-  line-height: 1.2;
-}
-</style>

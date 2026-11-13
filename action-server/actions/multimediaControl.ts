@@ -1,8 +1,59 @@
-import { ActionType, type Action } from '../../shared/types'
+import { ActionType, type Action, type ActionStateValue } from '../../shared/types'
 import { getPlatform } from '../../shared/platform'
 import { executeCommand } from './commandExecutor'
 
 const options = ['PlayPause', 'NextTrack', 'PreviousTrack', 'VolumeUp', 'VolumeDown', 'Mute']
+
+/** Run each command in turn until one succeeds. Resolves with its stdout, or `null` if all failed. */
+async function firstOutput(commands: string[]): Promise<string | null> {
+  for (const command of commands) {
+    try {
+      return await executeCommand(command)
+    } catch {
+      // Tool missing or no audio server; try the next one.
+    }
+  }
+  return null
+}
+
+/** Whether the default output is muted, or `null` when it can't be read (always on Windows). */
+async function readMuted(): Promise<ActionStateValue> {
+  const platform = getPlatform()
+  if (platform === 'linux') {
+    // "Volume: 0.28" or "Volume: 0.28 [MUTED]"
+    const wpctl = await firstOutput(['/usr/bin/wpctl get-volume @DEFAULT_AUDIO_SINK@'])
+    if (wpctl !== null) return wpctl.includes('[MUTED]')
+    // "Mute: yes" / "Mute: no"
+    const pactl = await firstOutput(['/usr/bin/pactl get-sink-mute @DEFAULT_SINK@'])
+    return pactl === null ? null : /yes/i.test(pactl)
+  }
+  if (platform === 'darwin') {
+    const out = await firstOutput(["osascript -e 'output muted of (get volume settings)'"])
+    return out === null ? null : out.trim() === 'true'
+  }
+  return null
+}
+
+/** Whether media is playing, or `null` when it can't be read (always on Windows). */
+async function readPlaying(): Promise<ActionStateValue> {
+  const platform = getPlatform()
+  if (platform === 'linux') {
+    // "Playing" / "Paused" / "Stopped". With no player open, playerctl exits non-zero,
+    // which means nothing is playing; only a missing playerctl means unknown.
+    const out = await firstOutput([
+      'test -x /usr/bin/playerctl && (/usr/bin/playerctl status 2>/dev/null || echo Stopped)',
+    ])
+    return out === null ? null : out.trim() === 'Playing'
+  }
+  if (platform === 'darwin') {
+    // The same players PlayPause controls, in the same order.
+    const out = await firstOutput([
+      "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to return (player state as string)' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to return (player state as string)' -e 'else' -e 'return \"stopped\"' -e 'end if'",
+    ])
+    return out === null ? null : out.trim() === 'playing'
+  }
+  return null
+}
 
 const action: Action = {
   actionId: 'multimediaControl',
@@ -13,6 +64,23 @@ const action: Action = {
       label: 'Control',
       type: ActionType.Enum,
       options,
+    },
+  ],
+  states: [
+    {
+      when: { control: 'Mute' },
+      kind: 'toggle',
+      valueLabels: { true: 'Muted', false: 'Unmuted' },
+      defaultIcons: { true: 'ic:baseline-volume-off', false: 'ic:baseline-volume-up' },
+      get: readMuted,
+    },
+    {
+      when: { control: 'PlayPause' },
+      kind: 'toggle',
+      valueLabels: { true: 'Playing', false: 'Paused' },
+      // Like a media player: while playing, the button offers pause.
+      defaultIcons: { true: 'ic:baseline-pause', false: 'ic:baseline-play-arrow' },
+      get: readPlaying,
     },
   ],
   async execute(parameters: Record<string, unknown>): Promise<void> {
@@ -32,22 +100,27 @@ const action: Action = {
     if (platform === 'darwin') {
       switch (toLower) {
         case 'playpause':
-          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to playpause' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to playpause' -e 'else' -e 'tell application \"System Events\" to key code 100' -e 'end if'"
+          command =
+            "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to playpause' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to playpause' -e 'else' -e 'tell application \"System Events\" to key code 100' -e 'end if'"
           break
         case 'nexttrack':
-          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to next track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to next track' -e 'else' -e 'tell application \"System Events\" to key code 101' -e 'end if'"
+          command =
+            "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to next track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to next track' -e 'else' -e 'tell application \"System Events\" to key code 101' -e 'end if'"
           break
         case 'previoustrack':
-          command = "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to previous track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to previous track' -e 'else' -e 'tell application \"System Events\" to key code 98' -e 'end if'"
+          command =
+            "osascript -e 'if application \"Music\" is running then' -e 'tell application \"Music\" to previous track' -e 'else if application \"Spotify\" is running then' -e 'tell application \"Spotify\" to previous track' -e 'else' -e 'tell application \"System Events\" to key code 98' -e 'end if'"
           break
         case 'volumeup':
-          command = "osascript -e 'set newVolume to output volume of (get volume settings) + 5' -e 'if newVolume > 100 then set newVolume to 100' -e 'set volume output volume newVolume'"
+          command =
+            "osascript -e 'set newVolume to output volume of (get volume settings) + 5' -e 'if newVolume > 100 then set newVolume to 100' -e 'set volume output volume newVolume'"
           break
         case 'volumedown':
-          command = "osascript -e 'set newVolume to output volume of (get volume settings) - 5' -e 'if newVolume < 0 then set newVolume to 0' -e 'set volume output volume newVolume'"
+          command =
+            "osascript -e 'set newVolume to output volume of (get volume settings) - 5' -e 'if newVolume < 0 then set newVolume to 0' -e 'set volume output volume newVolume'"
           break
         case 'mute':
-          command = "osascript -e 'set volume output muted true'"
+          command = "osascript -e 'set volume output muted (not (output muted of (get volume settings)))'"
           break
         default:
           console.warn(`MultimediaControl.execute: unsupported control ${control}`)

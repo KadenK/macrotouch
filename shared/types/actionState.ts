@@ -3,10 +3,12 @@ import type { Icon } from './macro'
 import type { NodeId } from './node'
 
 /**
- * Live action state (Demo 2).
+ * Live action state.
  *
- * Nothing in Demo 1 produces any of this. The types exist so the protocol does
- * not have to change shape when the state monitor lands.
+ * An Action Server reports typed values (`true`, `0.4`), never visuals. A macro
+ * decides how each value looks through {@link Macro.stateAppearance}; an
+ * action only supplies {@link ActionAppearance} for visuals it owns outright,
+ * such as album art.
  */
 
 /** The current reading of a stateful action, e.g. the system volume. */
@@ -23,10 +25,23 @@ export interface ActionAppearance {
 /**
  * Identifies one watched action: an `actionId` plus the parameters it was
  * watched with, since the same action watched with different parameters is two
- * separate readings. The master derives the key and both sides echo it rather
- * than re-deriving it from the parameters.
+ * separate readings. Built only by {@link actionStateKey}, which the master and
+ * the controller share so a controller can find the reading for a macro.
  */
 export type ActionStateKey = string
+
+/**
+ * The key for an action watched with some parameters.
+ *
+ * Parameter order is ignored, and no parameters equals an empty object, so two
+ * macros bound to the same action share one reading.
+ */
+export function actionStateKey(actionId: string, parameters?: Record<string, unknown>): ActionStateKey {
+  const entries = Object.entries(parameters ?? {})
+    .filter(([, value]) => value !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  return entries.length ? `${actionId}:${JSON.stringify(entries)}` : actionId
+}
 
 /** One action the master has asked a node to report on. */
 export interface WatchedAction {
