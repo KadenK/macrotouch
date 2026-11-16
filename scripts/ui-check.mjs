@@ -356,7 +356,7 @@ await check('MC-08', 'deleting a macro prompts and empties the cell', async () =
 skip(
   'MC-10/MC-11',
   'move a macro between cells',
-  'not reachable: no UI calls moveMacro() — same as the master baseline',
+  'drag and drop is not yet automated here; check by hand in the editor',
 )
 
 sec('H. Settings (SE)')

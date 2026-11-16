@@ -204,12 +204,11 @@ it. Confirming empties the cell and removes the macro from state.
 **MC-09 — Macro with no action.** A macro can be saved without a usable action. Triggering it logs
 a warning on the host and does nothing. No crash, no UI error.
 
-**MC-10 — Move a macro.** Move a macro from one cell to another on the same screen. The source cell
-becomes empty, the target cell holds it, and the change persists across a restart.
+**MC-10 — Move a macro.** In the editor, drag a macro onto an empty cell of the same screen. The
+source cell becomes empty, the target cell holds it, and the change persists across a restart.
 
-**MC-11 — Move onto an occupied cell.** ⚠ Moving a macro onto a cell that already holds one
-overwrites the target's placement; the overwritten macro remains in `macros` with nothing pointing
-at it.
+**MC-11 — Move onto an occupied cell.** Dragging a macro onto a cell that already holds one swaps
+the two. Neither macro is lost.
 
 ---
 
@@ -500,7 +499,6 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | SC-06 | Shrinking a grid drops placements and orphans the macro records |
 | SC-09 | "No screens" does not survive a reload — one is auto-created |
 | MC-06 | Same-named parameter keys carry across a change of action type |
-| MC-11 | Moving onto an occupied cell orphans the overwritten macro |
 | RT-02 | Triggers are fire-and-forget; the phone never learns an action failed |
 | RT-12 | Runtime with zero screens renders blank with no message |
 | AC-01 | Shell Command is passed to the shell unescaped |

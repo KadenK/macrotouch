@@ -403,6 +403,26 @@ async function main() {
     assert(rows[1].macrosIds[2] === macro.id, 'target cell was not filled')
   })
 
+  await check('move-macro onto an occupied cell swaps the two macros', async () => {
+    const { c } = await connected()
+    const screen = makeScreen()
+    c.send({ type: 'upsert-screen', screen })
+    await c.next(isPatch)
+
+    const a = makeMacro()
+    const b = makeMacro()
+    c.send({ type: 'upsert-macro', macro: a, placement: { screenId: screen.id, position: { row: 0, column: 0 } } })
+    await c.next(isPatch)
+    c.send({ type: 'upsert-macro', macro: b, placement: { screenId: screen.id, position: { row: 1, column: 2 } } })
+    await c.next(isPatch)
+
+    c.send({ type: 'move-macro', screenId: screen.id, from: { row: 0, column: 0 }, to: { row: 1, column: 2 } })
+    const rows = (await c.next(isPatch)).screens[screen.id].macroRows
+
+    assert(rows[0].macrosIds[0] === b.id, 'the displaced macro was not moved to the source cell')
+    assert(rows[1].macrosIds[2] === a.id, 'the moved macro is not in the target cell')
+  })
+
   await check('delete-screen cascades tombstones for its macros', async () => {
     const { c } = await connected()
     const screen = makeScreen()

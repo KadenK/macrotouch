@@ -1,5 +1,18 @@
 <template>
-  <div class="macro-container" :class="{ 'macro-container--hidden': isHiddenBlank }">
+  <div
+    class="macro-container"
+    :class="{
+      'macro-container--hidden': isHiddenBlank,
+      'macro-container--dragging': isDragging,
+      'macro-container--drop-target': isDropTarget,
+    }"
+    :draggable="mode === 'edit' && !!macro"
+    @dragstart="onDragStart"
+    @dragend="onDragEnd"
+    @dragover="onDragOver"
+    @dragleave="isDropTarget = false"
+    @drop="onDrop"
+  >
     <button v-if="mode === 'edit'" :type="'button'" class="macro edit" @click="openEditor">
       <component :is="display" v-if="macro" v-bind="displayProps" />
       <div v-else class="macro-display placeholder">
@@ -79,6 +92,47 @@ const displayProps = computed<MacroDisplayProps | undefined>(() => {
 
 const isModalOpen = ref(false)
 
+// Editor drag and drop: drag a macro onto another cell of the same screen to
+// move it (or swap, if the target is occupied).
+const DRAG_TYPE = 'application/x-macrotouch-cell'
+const isDragging = ref(false)
+const isDropTarget = ref(false)
+
+function onDragStart(event: DragEvent) {
+  if (mode !== 'edit' || !macro.value || !event.dataTransfer) return
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ screenId, from: position }))
+  isDragging.value = true
+}
+
+function onDragEnd() {
+  isDragging.value = false
+}
+
+// Drag data is unreadable until drop, so the type alone gates the highlight;
+// a drop from another screen is rejected in onDrop.
+function onDragOver(event: DragEvent) {
+  if (mode !== 'edit' || !event.dataTransfer?.types.includes(DRAG_TYPE)) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  isDropTarget.value = true
+}
+
+function onDrop(event: DragEvent) {
+  isDropTarget.value = false
+  const raw = event.dataTransfer?.getData(DRAG_TYPE)
+  if (mode !== 'edit' || !raw) return
+  event.preventDefault()
+  try {
+    const data = JSON.parse(raw) as { screenId: string; from: Position }
+    if (data.screenId !== screenId) return
+    store.moveMacro(screenId, data.from, position)
+    emit('update')
+  } catch {
+    // Not a drag we started.
+  }
+}
+
 function openEditor() {
   isModalOpen.value = true
 }
@@ -100,6 +154,16 @@ function handleTrigger(value?: ActionStateValue) {
   height: 100%;
   min-height: 0;
   min-width: 0;
+}
+
+.macro-container--dragging {
+  opacity: 0.4;
+}
+
+.macro-container--drop-target {
+  outline: 2px dashed #3b82f6;
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .macro-container--hidden {
