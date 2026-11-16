@@ -331,8 +331,9 @@ export const useMacroStore = defineStore('Macro', () => {
       return
     }
     const macroId = screen.macroRows[from.row]!.macrosIds[from.column]
-    if (macroId) {
-      screen.macroRows[from.row]!.macrosIds[from.column] = ''
+    if (macroId && !(from.row === to.row && from.column === to.column)) {
+      // An occupied target swaps places with the moved macro.
+      screen.macroRows[from.row]!.macrosIds[from.column] = screen.macroRows[to.row]!.macrosIds[to.column] ?? ''
       screen.macroRows[to.row]!.macrosIds[to.column] = macroId
       send({ type: 'move-macro', screenId, from, to })
     }

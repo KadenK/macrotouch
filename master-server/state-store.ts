@@ -118,9 +118,9 @@ export class StateStore {
     const macroId = screen.macroRows[cmd.from.row]!.macrosIds[cmd.from.column]
     if (!macroId) return { type: 'state-patch' }
 
-    // Overwrites whatever is in the target cell, leaving that macro orphaned
-    // in `macros` (MC-11). Preserved deliberately.
-    screen.macroRows[cmd.from.row]!.macrosIds[cmd.from.column] = ''
+    // An occupied target swaps places with the moved macro rather than losing it.
+    const displaced = screen.macroRows[cmd.to.row]!.macrosIds[cmd.to.column] ?? ''
+    screen.macroRows[cmd.from.row]!.macrosIds[cmd.from.column] = displaced
     screen.macroRows[cmd.to.row]!.macrosIds[cmd.to.column] = macroId
     return { type: 'state-patch', screens: { [screen.id]: screen } }
   }
