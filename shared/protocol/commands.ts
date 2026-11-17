@@ -1,4 +1,4 @@
-import type { Macro } from '../types/macro'
+import type { Macro, MacroSpan } from '../types/macro'
 import type { MacroScreen, Position } from '../types/screen'
 import type { MacroSettings } from '../types/state'
 
@@ -40,6 +40,18 @@ export interface MoveMacroCommand {
   to: Position
 }
 
+/**
+ * Resize the macro whose top-left cell is `position`, to cover `span` cells.
+ * `anchor` is its new top-left cell when a top or left edge moved; it defaults to `position`.
+ */
+export interface ResizeMacroCommand {
+  type: 'resize-macro'
+  screenId: string
+  position: Position
+  span: MacroSpan
+  anchor?: Position
+}
+
 /** Create or replace a screen. */
 export interface UpsertScreenCommand {
   type: 'upsert-screen'
@@ -62,6 +74,7 @@ export type StateCommand =
   | UpsertMacroCommand
   | DeleteMacroCommand
   | MoveMacroCommand
+  | ResizeMacroCommand
   | UpsertScreenCommand
   | DeleteScreenCommand
   | UpdateSettingsCommand

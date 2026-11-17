@@ -14,6 +14,12 @@ export interface Icon {
   value: string
 }
 
+/** How many grid cells a macro covers, from its top-left cell. */
+export interface MacroSpan {
+  rows: number
+  columns: number
+}
+
 export interface Macro {
   id: string
   name: string
@@ -34,6 +40,12 @@ export interface Macro {
    * catalog to look it up in. Absent for a plain button.
    */
   stateKind?: ActionStateKind
+  /**
+   * The cells the macro covers. Absent means one cell. The macro's id sits in
+   * its top-left cell of `macroRows`; the other cells it covers hold ''. The
+   * master owns this field: an upsert never changes it, only `resize-macro`.
+   */
+  span?: MacroSpan
 }
 
 export function createMacro(name = 'New Macro'): Macro {

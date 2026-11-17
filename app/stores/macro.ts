@@ -10,6 +10,7 @@ import type {
   Macro,
   MacroScreen,
   MacroSettings,
+  MacroSpan,
   MacroState,
   Position,
   ScreenListItem,
@@ -17,6 +18,7 @@ import type {
 } from '~/../shared/types'
 import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
 import { uuid } from '~/../shared/uuid'
+import { applyAssignments, fits, isUnitSpan, planMove, resolveLayout } from '~/../shared/layout'
 import { actionStateKey, createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
@@ -196,7 +198,9 @@ export const useMacroStore = defineStore('Macro', () => {
 
   function updateMacro(updatedMacro: Macro, id?: string) {
     const macroId = id || updatedMacro.id
-    macros.value[macroId] = updatedMacro
+    // The size belongs to the layout, not the editor that rebuilt this macro.
+    const span = macros.value[macroId]?.span
+    macros.value[macroId] = span ? { ...updatedMacro, span } : updatedMacro
     send({ type: 'upsert-macro', macro: macros.value[macroId]! })
   }
 
@@ -290,6 +294,11 @@ export const useMacroStore = defineStore('Macro', () => {
       console.error(`Invalid row or column index for screen size`)
       return
     }
+    const covering = resolveLayout(screen, macros.value).owner[position.row]![position.column]
+    if (covering && covering !== macro.id) {
+      console.error(`Cell ${position.row},${position.column} is taken`)
+      return
+    }
     _addMacro(macro)
     screen.macroRows[position.row]!.macrosIds[position.column] = macro.id
     send({ type: 'upsert-macro', macro, placement: { screenId, position } })
@@ -330,12 +339,39 @@ export const useMacroStore = defineStore('Macro', () => {
       console.error(`Invalid row or column index for screen size`)
       return
     }
-    const macroId = screen.macroRows[from.row]!.macrosIds[from.column]
-    if (macroId && !(from.row === to.row && from.column === to.column)) {
-      // An occupied target swaps places with the moved macro.
-      screen.macroRows[from.row]!.macrosIds[from.column] = screen.macroRows[to.row]!.macrosIds[to.column] ?? ''
-      screen.macroRows[to.row]!.macrosIds[to.column] = macroId
-      send({ type: 'move-macro', screenId, from, to })
+    // Moves onto free cells, or swaps with the one macro in the way; otherwise nothing changes.
+    const plan = planMove(screen, macros.value, from, to)
+    if (!plan) return
+    applyAssignments(screen, plan)
+    send({ type: 'move-macro', screenId, from, to })
+  }
+
+  /** Make the macro whose top-left cell is `position` cover `span` cells. Does nothing if that doesn't fit. */
+  function resizeMacro(
+    screenOrScreenId: string | MacroScreen,
+    position: Position,
+    span: MacroSpan,
+    anchor: Position = position,
+  ) {
+    const screenId = resolveScreenId(screenOrScreenId)
+    const screen = screens.value[screenId]
+    if (!screen) {
+      console.error(`Screen with id ${screenId} does not exist`)
+      return
+    }
+    const placed = resolveLayout(screen, macros.value).placements.find(
+      (p) => p.row === position.row && p.column === position.column,
+    )
+    const macro = placed && macros.value[placed.macroId]
+    if (!placed || !macro || !fits(screen, macros.value, placed.macroId, anchor, span)) return
+
+    const { span: _old, ...rest } = macro
+    macros.value[placed.macroId] = isUnitSpan(span) ? rest : { ...rest, span: { ...span } }
+    if (anchor.row !== position.row || anchor.column !== position.column) {
+      applyAssignments(screen, [{ macroId: placed.macroId, from: position, to: anchor }])
+      send({ type: 'resize-macro', screenId, position, span, anchor })
+    } else {
+      send({ type: 'resize-macro', screenId, position, span })
     }
   }
 
@@ -359,6 +395,7 @@ export const useMacroStore = defineStore('Macro', () => {
     addMacro,
     deleteMacro,
     moveMacro,
+    resizeMacro,
     triggerMacro,
     applySnapshot,
     applyPatch,

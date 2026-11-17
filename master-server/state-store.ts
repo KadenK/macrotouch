@@ -1,4 +1,5 @@
-import type { MacroScreen, MacroState, ScreenRow } from '../shared/types'
+import type { Macro, MacroScreen, MacroState, ScreenRow } from '../shared/types'
+import { applyAssignments, fits, isUnitSpan, planMove, resolveLayout } from '../shared/layout'
 import type { ProtocolError, StateCommand, StatePatch } from '../shared/protocol'
 import { emptyState } from './state-file'
 
@@ -64,6 +65,8 @@ export class StateStore {
         return this.deleteMacro(cmd)
       case 'move-macro':
         return this.moveMacro(cmd)
+      case 'resize-macro':
+        return this.resizeMacro(cmd)
       case 'upsert-screen':
         return this.upsertScreen(cmd)
       case 'delete-screen':
@@ -78,15 +81,29 @@ export class StateStore {
   }
 
   private upsertMacro(cmd: Extract<StateCommand, { type: 'upsert-macro' }>): StatePatch | ProtocolError {
-    const { macro, placement } = cmd
-    this.state.macros[macro.id] = macro
-    const patch: StatePatch = { type: 'state-patch', macros: { [macro.id]: macro } }
-
+    const { placement } = cmd
+    let screen: MacroScreen | undefined
     if (placement) {
-      const screen = this.state.screens[placement.screenId]
+      screen = this.state.screens[placement.screenId]
       if (!screen) return err('unknown-screen', `No screen ${placement.screenId}`)
       const bad = this.outOfRange(screen, placement.position)
       if (bad) return bad
+      const covering = resolveLayout(screen, this.state.macros).owner[placement.position.row]![
+        placement.position.column
+      ]
+      if (covering && covering !== cmd.macro.id) {
+        return err('invalid-message', `Cell ${placement.position.row},${placement.position.column} is taken`)
+      }
+    }
+
+    // Only resize-macro changes a span, so an edit that rebuilt the macro without one can't lose it.
+    const { span: _ignored, ...rest } = cmd.macro
+    const kept = this.state.macros[cmd.macro.id]?.span
+    const macro: Macro = kept ? { ...rest, span: kept } : rest
+    this.state.macros[macro.id] = macro
+    const patch: StatePatch = { type: 'state-patch', macros: { [macro.id]: macro } }
+
+    if (placement && screen) {
       screen.macroRows[placement.position.row]!.macrosIds[placement.position.column] = macro.id
       patch.screens = { [screen.id]: screen }
     }
@@ -118,11 +135,44 @@ export class StateStore {
     const macroId = screen.macroRows[cmd.from.row]!.macrosIds[cmd.from.column]
     if (!macroId) return { type: 'state-patch' }
 
-    // An occupied target swaps places with the moved macro rather than losing it.
-    const displaced = screen.macroRows[cmd.to.row]!.macrosIds[cmd.to.column] ?? ''
-    screen.macroRows[cmd.from.row]!.macrosIds[cmd.from.column] = displaced
-    screen.macroRows[cmd.to.row]!.macrosIds[cmd.to.column] = macroId
+    // The macro goes if its cells are free, or swaps with the one macro in the way.
+    // If it can't, nothing changes.
+    const plan = planMove(screen, this.state.macros, cmd.from, cmd.to)
+    if (!plan) return { type: 'state-patch' }
+    applyAssignments(screen, plan)
     return { type: 'state-patch', screens: { [screen.id]: screen } }
+  }
+
+  private resizeMacro(cmd: Extract<StateCommand, { type: 'resize-macro' }>): StatePatch | ProtocolError {
+    const screen = this.state.screens[cmd.screenId]
+    if (!screen) return err('unknown-screen', `No screen ${cmd.screenId}`)
+    const bad = this.outOfRange(screen, cmd.position)
+    if (bad) return bad
+
+    const placed = resolveLayout(screen, this.state.macros).placements.find(
+      (p) => p.row === cmd.position.row && p.column === cmd.position.column,
+    )
+    const macro = placed && this.state.macros[placed.macroId]
+    if (!placed || !macro) return err('unknown-macro', `No macro at ${cmd.position.row},${cmd.position.column}`)
+
+    const anchor = cmd.anchor ?? cmd.position
+    const badAnchor = this.outOfRange(screen, anchor)
+    if (badAnchor) return badAnchor
+    if (!fits(screen, this.state.macros, placed.macroId, anchor, cmd.span)) {
+      return err('invalid-message', `A ${cmd.span.rows}x${cmd.span.columns} macro does not fit there`)
+    }
+
+    const { span: _old, ...rest } = macro
+    const next: Macro = isUnitSpan(cmd.span)
+      ? rest
+      : { ...rest, span: { rows: cmd.span.rows, columns: cmd.span.columns } }
+    this.state.macros[placed.macroId] = next
+    const patch: StatePatch = { type: 'state-patch', macros: { [placed.macroId]: next } }
+    if (anchor.row !== cmd.position.row || anchor.column !== cmd.position.column) {
+      applyAssignments(screen, [{ macroId: placed.macroId, from: cmd.position, to: anchor }])
+      patch.screens = { [screen.id]: screen }
+    }
+    return patch
   }
 
   private upsertScreen(cmd: Extract<StateCommand, { type: 'upsert-screen' }>): StatePatch {

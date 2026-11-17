@@ -26,6 +26,9 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const isStr = (v: unknown): v is string => typeof v === 'string'
 const isPos = (v: unknown): boolean => isObj(v) && typeof v.row === 'number' && typeof v.column === 'number'
 
+const isSpan = (v: unknown): boolean =>
+  isObj(v) && Number.isInteger(v.rows) && Number.isInteger(v.columns) && Number(v.rows) >= 1 && Number(v.columns) >= 1
+
 /** A macro/screen is checked for the fields the store actually dereferences. */
 const isMacro = (v: unknown): boolean => isObj(v) && isStr(v.id)
 const isScreen = (v: unknown): boolean =>
@@ -53,6 +56,11 @@ function validateCommand(m: Record<string, unknown>): StateCommand | ProtocolErr
     case 'move-macro':
       if (!isStr(m.screenId) || !isPos(m.from) || !isPos(m.to)) {
         return fail('move-macro requires screenId, from and to')
+      }
+      return m as unknown as StateCommand
+    case 'resize-macro':
+      if (!isStr(m.screenId) || !isPos(m.position) || !isSpan(m.span) || (m.anchor !== undefined && !isPos(m.anchor))) {
+        return fail('resize-macro requires screenId, position and a span of whole rows and columns')
       }
       return m as unknown as StateCommand
     case 'upsert-screen':
