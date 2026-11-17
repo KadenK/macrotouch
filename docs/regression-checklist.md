@@ -210,6 +210,22 @@ source cell becomes empty, the target cell holds it, and the change persists acr
 **MC-11 — Move onto an occupied cell.** Dragging a macro onto a cell that already holds one swaps
 the two. Neither macro is lost.
 
+**MC-12 — Resize a macro.** In the editor, hover a macro: a thin two-tone border and a handle at the
+bottom-right corner appear (visible even when the macro and screen backgrounds match). Drag the handle
+to resize it to, say, 1x2, 2x1 or 3x3. A preview shows the cells it will cover, never more than fit
+(grid edge, other macros). The covered cells disappear, the macro fills the area on the editor and the
+remote, and the size persists across a restart. Escape cancels a drag in progress. Resizing back to
+1x1 restores the single cell.
+
+**MC-13 — Editing keeps the size.** Saving a resized macro's settings does not reset its size.
+
+**MC-14 — Move a resized macro.** Dragging a macro that covers several cells keeps the cell you grabbed
+under the pointer, and shows where it will land. It lands if the cells are free, or swaps with the one
+macro in the way if each fits the other's place; otherwise the drop is refused and nothing changes.
+
+**MC-15 — Covered cells.** A cell covered by a larger macro cannot be given a new macro. Shrinking a
+screen under a resized macro draws it cut to the new grid; growing the screen again restores its size.
+
 ---
 
 ## E. Pairing and device access (`PA`)

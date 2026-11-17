@@ -423,6 +423,152 @@ async function main() {
     assert(rows[1].macrosIds[2] === a.id, 'the moved macro is not in the target cell')
   })
 
+  /** A 2x3 screen with `macro` at 0,0, ready to resize. */
+  const withMacroAtOrigin = async () => {
+    const { c } = await connected()
+    const screen = makeScreen()
+    c.send({ type: 'upsert-screen', screen })
+    await c.next(isPatch)
+    const macro = makeMacro()
+    c.send({ type: 'upsert-macro', macro, placement: { screenId: screen.id, position: { row: 0, column: 0 } } })
+    await c.next(isPatch)
+    return { c, screen, macro }
+  }
+  const at = (row, column) => ({ row, column })
+
+  await check('resize-macro gives a macro a span, and 1x1 takes it away again', async () => {
+    const { c, screen, macro } = await withMacroAtOrigin()
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 2, columns: 2 } })
+    const grown = await c.next(isPatch)
+    assert(grown.macros?.[macro.id]?.span?.rows === 2, 'the macro did not get its span')
+    assert(grown.macros[macro.id].span.columns === 2, 'the span has the wrong columns')
+
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 1, columns: 1 } })
+    const shrunk = await c.next(isPatch)
+    assert(!('span' in shrunk.macros[macro.id]), 'a one-cell macro should carry no span')
+  })
+
+  await check('resize-macro with an anchor grows a macro up and left', async () => {
+    const { c, screen, macro } = await withMacroAtOrigin()
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 0), to: at(1, 1) })
+    await c.next(isPatch)
+    c.send({
+      type: 'resize-macro',
+      screenId: screen.id,
+      position: at(1, 1),
+      anchor: at(0, 0),
+      span: { rows: 2, columns: 2 },
+    })
+    const patch = await c.next(isPatch)
+    const rows = patch.screens?.[screen.id]?.macroRows
+    assert(rows?.[0]?.macrosIds[0] === macro.id, 'the macro did not move to its new top-left cell')
+    assert(!rows[1].macrosIds[1], 'the old top-left cell still names the macro')
+    assert(patch.macros[macro.id].span.rows === 2, 'the span was not applied')
+
+    c.send({
+      type: 'resize-macro',
+      screenId: screen.id,
+      position: at(0, 0),
+      anchor: at(0, 1),
+      span: { rows: 3, columns: 1 },
+    })
+    assert(isError(await c.next(isError)), 'an anchor that pushes the macro off the grid was accepted')
+  })
+
+  await check('resize-macro is refused where the macro would not fit', async () => {
+    const { c, screen } = await withMacroAtOrigin()
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 3, columns: 1 } })
+    assert(isError(await c.next(isError)), 'a span past the last row was accepted')
+
+    const blocker = makeMacro()
+    c.send({ type: 'upsert-macro', macro: blocker, placement: { screenId: screen.id, position: at(1, 1) } })
+    await c.next(isPatch)
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 2, columns: 2 } })
+    assert(isError(await c.next(isError)), 'a span over another macro was accepted')
+  })
+
+  await check('a cell covered by a larger macro cannot take a new macro', async () => {
+    const { c, screen } = await withMacroAtOrigin()
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 2, columns: 2 } })
+    await c.next(isPatch)
+    c.send({ type: 'upsert-macro', macro: makeMacro(), placement: { screenId: screen.id, position: at(1, 1) } })
+    assert(isError(await c.next(isError)), 'a macro was placed on a covered cell')
+  })
+
+  await check('editing a macro keeps its span', async () => {
+    const { c, screen, macro } = await withMacroAtOrigin()
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 1, columns: 2 } })
+    await c.next(isPatch)
+    c.send({ type: 'upsert-macro', macro: { ...macro, name: 'Renamed' } })
+    const patch = await c.next(isPatch)
+    assert(patch.macros[macro.id].name === 'Renamed', 'the edit was not applied')
+    assert(patch.macros[macro.id].span?.columns === 2, 'the edit dropped the span')
+  })
+
+  await check('a client cannot set a span through an upsert', async () => {
+    const { c, macro } = await withMacroAtOrigin()
+    c.send({ type: 'upsert-macro', macro: { ...macro, span: { rows: 9, columns: 9 } } })
+    const patch = await c.next(isPatch)
+    assert(!patch.macros[macro.id].span, 'an upsert set a span that never went through resize-macro')
+  })
+
+  await check('move-macro moves a large macro as a whole, and refuses a move that would overlap', async () => {
+    const { c, screen, macro } = await withMacroAtOrigin()
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 2, columns: 1 } })
+    await c.next(isPatch)
+
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 0), to: at(0, 2) })
+    const moved = (await c.next(isPatch)).screens[screen.id].macroRows
+    assert(moved[0].macrosIds[2] === macro.id && moved[0].macrosIds[0] === '', 'the macro did not move')
+
+    // A 2-row macro cannot be anchored on the last row.
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 2), to: at(1, 1) })
+    const refused = await c.next(isPatch)
+    assert(!refused.screens, 'a move past the bottom edge was applied')
+  })
+
+  await check("move-macro swaps macros of different sizes when each fits the other's place", async () => {
+    const { c, screen, macro } = await withMacroAtOrigin()
+    const small = makeMacro()
+    c.send({ type: 'upsert-macro', macro: small, placement: { screenId: screen.id, position: at(0, 2) } })
+    await c.next(isPatch)
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(0, 0), span: { rows: 1, columns: 2 } })
+    await c.next(isPatch)
+
+    // The 1x2 macro shifts right over the small one, which takes the freed corner.
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 0), to: at(0, 1) })
+    const row = (await c.next(isPatch)).screens[screen.id].macroRows[0].macrosIds
+    assert(row[1] === macro.id && row[0] === small.id && row[2] === '', `unexpected row ${JSON.stringify(row)}`)
+  })
+
+  await check('move-macro refuses a swap when the displaced macro would not fit', async () => {
+    const { c, screen } = await withMacroAtOrigin()
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 0), to: at(0, 1) })
+    await c.next(isPatch)
+    const wide = makeMacro()
+    c.send({ type: 'upsert-macro', macro: wide, placement: { screenId: screen.id, position: at(1, 0) } })
+    await c.next(isPatch)
+    c.send({ type: 'resize-macro', screenId: screen.id, position: at(1, 0), span: { rows: 1, columns: 3 } })
+    await c.next(isPatch)
+
+    // Swapping would put the 1x3 macro at 0,1, running off the right edge.
+    c.send({ type: 'move-macro', screenId: screen.id, from: at(0, 1), to: at(1, 1) })
+    const refused = await c.next(isPatch)
+    assert(!refused.screens, 'a swap that overflows the grid was applied')
+  })
+
+  await check('a cell naming a macro that no longer exists counts as empty', async () => {
+    const { c } = await connected()
+    const screen = makeScreen()
+    screen.macroRows[0].macrosIds[0] = uid('gone')
+    c.send({ type: 'upsert-screen', screen })
+    await c.next(isPatch)
+    const macro = makeMacro()
+    c.send({ type: 'upsert-macro', macro, placement: { screenId: screen.id, position: { row: 0, column: 0 } } })
+    const patch = await c.next((m) => isPatch(m) || isError(m))
+    assert(patch.screens?.[screen.id]?.macroRows[0].macrosIds[0] === macro.id, 'the dangling cell refused a new macro')
+  })
+
   await check('delete-screen cascades tombstones for its macros', async () => {
     const { c } = await connected()
     const screen = makeScreen()

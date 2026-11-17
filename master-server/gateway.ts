@@ -39,6 +39,7 @@ const COMMAND_TYPES = new Set<StateCommand['type']>([
   'upsert-macro',
   'delete-macro',
   'move-macro',
+  'resize-macro',
   'upsert-screen',
   'delete-screen',
   'update-settings',
