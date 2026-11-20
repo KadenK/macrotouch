@@ -1,4 +1,4 @@
-import { ActionType, type Action } from '../../shared/types'
+import { ActionType, defineAction, type Parameters } from '../../plugin-sdk'
 
 const macSpecialKeys: Record<string, number> = {
   enter: 36,
@@ -241,9 +241,20 @@ const buildLinuxSequence = (modifiers: string[], key: string) => {
   return [...modifierTokens, keyToken].join('+')
 }
 
-const action: Action = {
-  actionId: 'keyCombo',
+const parseKeys = (parameters: Parameters) => {
+  const rawKeys = parameters?.keys
+  if (!rawKeys || typeof rawKeys !== 'string') throw new Error('Missing or invalid keys parameter')
+  const tokens = splitCombo(rawKeys)
+  const key = tokens.pop()
+  if (!key) throw new Error('No key provided')
+  return { modifiers: tokens.map((token) => modifierAliases[token] || token), key }
+}
+
+const action = defineAction({
+  id: 'keyCombo',
   label: 'Key Combo',
+  description: 'Press a combination of keys.',
+  icon: 'ic:baseline-keyboard',
   actionFields: [
     {
       key: 'keys',
@@ -251,81 +262,33 @@ const action: Action = {
       type: ActionType.KeyCombo,
     },
   ],
-  async execute(parameters: Record<string, unknown>): Promise<void> {
-    console.log('Executing KeyCombo with parameters:', parameters)
-    const rawKeys = parameters?.keys
-    if (!rawKeys || typeof rawKeys !== 'string') {
-      console.warn('KeyCombo.execute: missing or invalid keys parameter')
-      return
-    }
-
-    const tokens = splitCombo(rawKeys)
-    const key = tokens.pop()
-    if (!key) {
-      console.warn('KeyCombo.execute: no key provided')
-      return
-    }
-
-    const modifiers = tokens.map((token) => modifierAliases[token] || token)
-
-    try {
-      const { executeCommand, executeSpawn } = await import('./commandExecutor')
-
-      if (process.platform === 'darwin') {
-        const script = buildAppleScript(modifiers, key)
-        await executeCommand(`osascript -e "${script.replace(/\"/g, '\\\"')}"`)
-        return
-      }
-
-      if (process.platform === 'win32') {
-        const sequence = buildWindowsSequence(modifiers, key)
-        const command = `[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sequence.replace(/'/g, "''")}')`
-        await executeCommand(`powershell -NoProfile -Command "${command.replace(/\"/g, '\\\"')}"`)
-        return
-      }
-
-      const sequence = buildLinuxSequence(modifiers, key)
-      const ydotoolSeq = buildYdotoolSequence(modifiers, key)
-
-      const runLinuxKeys = async (command: string, args: string[]) => {
-        console.log('KeyCombo.execute: running', command, args.join(' '))
-        await executeSpawn(command, args)
-      }
-
+  impl: {
+    darwin: async (parameters, ctx) => {
+      const { modifiers, key } = parseKeys(parameters)
+      const script = buildAppleScript(modifiers, key)
+      await ctx.spawn('osascript', ['-e', script])
+    },
+    win32: async (parameters, ctx) => {
+      const { modifiers, key } = parseKeys(parameters)
+      const sequence = buildWindowsSequence(modifiers, key)
+      const command = `[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sequence.replace(/'/g, "''")}')`
+      await ctx.spawn('powershell', ['-NoProfile', '-Command', command])
+    },
+    linux: async (parameters, ctx) => {
+      const { modifiers, key } = parseKeys(parameters)
       try {
-        await runLinuxKeys('xdotool', ['key', '--clearmodifiers', sequence])
-        console.log('KeyCombo.execute: xdotool succeeded')
-      } catch (firstError: unknown) {
-        const errObj = firstError as { error?: { code?: string } } | null
-        const xdotoolNotFound =
-          typeof firstError === 'object' &&
-          firstError !== null &&
-          'error' in (firstError as Record<string, unknown>) &&
-          errObj?.error?.code === 'ENOENT'
-
-        const ydotoolArgs = ydotoolSeq.length ? ['key', ...ydotoolSeq] : []
-
-        if (xdotoolNotFound) {
-          console.warn('KeyCombo.execute: xdotool not installed, trying ydotool fallback')
-        } else {
-          console.warn('KeyCombo.execute: xdotool failed, trying ydotool fallback if available', firstError)
-        }
-
-        if (!ydotoolArgs.length) {
-          console.error('KeyCombo.execute failed: cannot build ydotool key sequence from', rawKeys)
-        } else {
-          try {
-            await runLinuxKeys('ydotool', ydotoolArgs)
-          } catch (secondError: unknown) {
-            console.error('KeyCombo.execute failed on Linux (ydotool path)', secondError)
-            console.error('Original xdotool error:', firstError)
-          }
+        await ctx.spawn('xdotool', ['key', '--clearmodifiers', buildLinuxSequence(modifiers, key)])
+      } catch {
+        const sequence = buildYdotoolSequence(modifiers, key)
+        if (!sequence.length) throw new Error('Cannot build ydotool key sequence')
+        try {
+          await ctx.spawn('ydotool', ['key', ...sequence])
+        } catch {
+          throw new Error('Neither xdotool nor ydotool could execute the key combo')
         }
       }
-    } catch (err: unknown) {
-      console.error('KeyCombo.execute: failed to launch key combo', err)
-    }
+    },
   },
-}
+})
 
 export default action

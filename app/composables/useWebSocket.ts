@@ -3,6 +3,7 @@ import { usePairingToken } from './usePairingToken'
 import { WEBSOCKET_PORT } from '../../shared/websocket'
 import { PROTOCOL_VERSION } from '../../shared/protocol'
 import type {
+  ActionResult,
   ActionStateMessage,
   CatalogsMessage,
   ClientToMasterMessage,
@@ -16,8 +17,9 @@ import type {
 type WebSocketHandlers = {
   snapshot?: (snapshot: Snapshot) => void
   patch?: (patch: StatePatch) => void
-  catalogs?: (catalogs: CatalogsMessage['catalogs']) => void
+  catalogs?: (catalogs: CatalogsMessage) => void
   actionState?: (states: ActionStateMessage['states']) => void
+  actionResult?: (result: ActionResult) => void
   pairingToken?: (token: string) => void
   error?: (error: ProtocolError) => void
   open?: () => void
@@ -141,7 +143,7 @@ const createWebSocket = () => {
           handlers.patch?.(data)
           break
         case 'catalogs':
-          handlers.catalogs?.(data.catalogs)
+          handlers.catalogs?.(data)
           break
         case 'pairing-token':
           handlers.pairingToken?.(data.token)
@@ -158,6 +160,9 @@ const createWebSocket = () => {
           break
         case 'action-state':
           handlers.actionState?.(data.states)
+          break
+        case 'action-result':
+          handlers.actionResult?.(data)
           break
       }
     }

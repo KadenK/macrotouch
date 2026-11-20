@@ -1,6 +1,7 @@
 import type { Macro } from '../types/macro'
 import type { MacroScreen } from '../types/screen'
 import type { MacroSettings } from '../types/state'
+import type { InstalledPlugin } from '../types/plugin'
 
 /**
  * Master to every client, after a command changes the state.
@@ -15,4 +16,5 @@ export interface StatePatch {
   macros?: Record<string, Macro | null>
   screens?: Record<string, MacroScreen | null>
   settings?: Partial<MacroSettings>
+  plugins?: Record<string, InstalledPlugin | null>
 }

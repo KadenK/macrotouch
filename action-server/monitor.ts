@@ -1,6 +1,16 @@
-import type { ActionStateEntry, ActionStateKey, ActionStateValue, NodeId, WatchedAction } from '../shared/types'
+import type {
+  ActionStateEntry,
+  ActionStateKey,
+  ActionStateValue,
+  NodeId,
+  WatchedAction,
+  ActionAppearance,
+} from '../shared/types'
 import { findActionState } from '../shared/types/action'
-import { actions } from './action-map'
+import { redactSecrets } from './redact'
+import type { PluginHost } from './plugin-host'
+import { errorText } from '../shared/errors'
+import { withTimeout } from './timeout'
 
 const POLL_INTERVAL_MS = 1000
 /**
@@ -18,6 +28,7 @@ const AFTER_RUN_READS_MS = [100, 200, 300, 400]
  * than stacking up behind it.
  */
 export class StateMonitor {
+  private subscriptions = new Map<ActionStateKey, () => void>()
   private watched = new Map<ActionStateKey, WatchedAction>()
   private last = new Map<ActionStateKey, ActionStateValue>()
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -27,6 +38,7 @@ export class StateMonitor {
   private quickReads: number[] = []
 
   constructor(
+    private readonly host: PluginHost,
     private readonly nodeId: NodeId,
     private readonly report: (states: ActionStateEntry[]) => void,
   ) {}
@@ -34,9 +46,54 @@ export class StateMonitor {
   /** Replace the watched set. Newly watched actions are read straight away. */
   setWatched(list: WatchedAction[]): void {
     const next = new Map(list.map((w) => [w.key, w]))
-    for (const key of this.last.keys()) if (!next.has(key)) this.last.delete(key)
+    for (const key of this.last.keys())
+      if (!next.has(key)) {
+        this.last.delete(key)
+        this.pushLast.delete(key)
+      }
+    for (const [key, unsubscribe] of this.subscriptions) {
+      if (!next.has(key) || JSON.stringify(next.get(key)) !== JSON.stringify(this.watched.get(key))) {
+        this.unsubscribe(unsubscribe)
+        this.subscriptions.delete(key)
+      }
+    }
     this.watched = next
+    for (const w of next.values()) {
+      if (this.subscriptions.has(w.key)) continue
+      const item = this.host.get(w.actionId)
+      const state = findActionState(item?.action.states, w.parameters)
+      if (state?.subscribe && item) {
+        try {
+          const unsubscribe = state.subscribe(
+            w.parameters,
+            (value, appearance) => this.emitReading(w, value, appearance),
+            item.ctx,
+          )
+          this.subscriptions.set(w.key, unsubscribe)
+          // A subscription only reports changes, so read the current value once.
+          if (state.get)
+            void this.read(w).then((value) => {
+              if (this.subscriptions.has(w.key) && !this.pushLast.has(w.key)) this.emitReading(w, value)
+            })
+        } catch (error) {
+          console.warn(`Failed to subscribe to ${w.actionId}`, redactSecrets(errorText(error), item.ctx.secrets))
+        }
+      }
+    }
     this.schedule(0)
+  }
+
+  pluginReload(id: string, before: boolean): void {
+    if (before) {
+      for (const [key, watched] of this.watched)
+        if (watched.actionId.startsWith(`${id}/`)) {
+          const unsubscribe = this.subscriptions.get(key)
+          if (unsubscribe) this.unsubscribe(unsubscribe)
+          this.subscriptions.delete(key)
+          this.last.delete(key)
+          this.pushLast.delete(key)
+        }
+    } else this.setWatched([...this.watched.values()])
   }
 
   /**
@@ -51,8 +108,18 @@ export class StateMonitor {
 
   stop(): void {
     this.stopped = true
+    for (const unsubscribe of this.subscriptions.values()) this.unsubscribe(unsubscribe)
+    this.subscriptions.clear()
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
+  }
+
+  private unsubscribe(unsubscribe: () => void): void {
+    try {
+      unsubscribe()
+    } catch {
+      console.warn('Failed to unsubscribe')
+    }
   }
 
   private schedule(delay: number): void {
@@ -81,7 +148,7 @@ export class StateMonitor {
   }
 
   private async readAll(): Promise<void> {
-    const watched = [...this.watched.values()]
+    const watched = [...this.watched.values()].filter((w) => !this.subscriptions.has(w.key))
     const readings = await Promise.all(watched.map((w) => this.read(w)))
     const changed: ActionStateEntry[] = []
     watched.forEach((w, i) => {
@@ -90,18 +157,47 @@ export class StateMonitor {
       if (!this.watched.has(w.key)) return
       if (this.last.has(w.key) && this.last.get(w.key) === value) return
       this.last.set(w.key, value)
-      changed.push({ key: w.key, nodeId: this.nodeId, value, updatedAt: Date.now() })
+      changed.push({
+        key: w.key,
+        nodeId: this.nodeId,
+        value,
+        updatedAt: Date.now(),
+      })
     })
     if (changed.length) this.report(changed)
   }
 
+  private emitReading(w: WatchedAction, value: ActionStateValue, appearance?: ActionAppearance): void {
+    if (!this.watched.has(w.key)) return
+    const signature = JSON.stringify([value, appearance])
+    if (this.pushLast.get(w.key) === signature) return
+    this.pushLast.set(w.key, signature)
+    this.last.set(w.key, value)
+    this.report([
+      {
+        key: w.key,
+        nodeId: this.nodeId,
+        value,
+        ...(appearance ? { appearance } : {}),
+        updatedAt: Date.now(),
+      },
+    ])
+  }
+
+  private failures = new Map<ActionStateKey, number>()
+  private pushLast = new Map<ActionStateKey, string>()
+
   private async read(w: WatchedAction): Promise<ActionStateValue> {
-    const state = findActionState(actions[w.actionId]?.states, w.parameters)
-    if (!state) return null
+    const item = this.host.get(w.actionId)
+    const state = findActionState(item?.action.states, w.parameters)
+    if (!state?.get || !item) return null
     try {
-      return await state.get(w.parameters)
+      return await withTimeout(() => state.get!(w.parameters, item.ctx), 5000, 'State getter timed out')
     } catch (err) {
-      console.warn(`Failed to read state of ${w.actionId}`, err)
+      if (Date.now() - (this.failures.get(w.key) ?? 0) >= 60000) {
+        this.failures.set(w.key, Date.now())
+        console.warn(`Failed to read state of ${w.actionId}`, redactSecrets(errorText(err), item.ctx.secrets))
+      }
       return null
     }
   }

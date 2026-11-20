@@ -1,25 +1,40 @@
 <template>
-  <div class="macro-kind" @click="mode === 'interact' && emit('trigger')">
-    <MacroFace :look="look" :label="showLabel ? macro.name : undefined" />
+  <div
+    class="icon-face"
+    :style="{ backgroundColor: colorToHex(current.backgroundColor) }"
+    @click="mode === 'interact' && emit('trigger')"
+  >
+    <Icon
+      :name="current.icon.source === 'LIBRARY' ? normalizeIconValue(current.icon.value) : ''"
+      class="icon"
+      :style="{ color: colorToHex(current.iconColor) }"
+    />
+    <FaceLabel v-if="showLabel" :name="macro.name" :style="{ color: colorToHex(current.iconColor) }" />
   </div>
 </template>
 
 <script lang="ts" setup>
-import MacroFace from '../MacroFace.vue'
-import type { MacroDisplayEmits, MacroDisplayProps, MacroLook } from '../../../composables/useMacroKind'
+import FaceLabel from './FaceLabel.vue'
+import { normalizeIconValue } from '~/composables/useIconData'
+import { colorToHex } from '~/../shared/types'
+import type { BaseFaceSettings, MacroDisplayEmits, MacroDisplayProps } from '~/composables/useMacroFace'
 
 /**
- * A button for an on/off state, such as mute. A tap runs the macro; the look
- * follows the live value through `stateAppearance`, with anything the action
- * reports for itself on top.
+ * The standard face: the macro's icon on its background, and a tap runs it.
+ * For a toggle action (such as mute) the icon and colors follow the live value
+ * through `stateAppearance`, with anything the action reports for itself on top.
  */
 const props = defineProps<MacroDisplayProps>()
 const emit = defineEmits<MacroDisplayEmits>()
 
-const look = computed<MacroLook>(() => {
+const current = computed<BaseFaceSettings>(() => {
   const { macro, mode, entry } = props
-  const base: MacroLook = { icon: macro.icon, iconColor: macro.iconColor, backgroundColor: macro.backgroundColor }
-  // The editor, and a remote that has no reading yet, show the "off" look.
+  const base: BaseFaceSettings = {
+    icon: macro.icon,
+    iconColor: macro.iconColor,
+    backgroundColor: macro.backgroundColor,
+  }
+  // The editor, and a remote that has no reading yet, show the "off" state.
   const value = mode === 'interact' && entry && entry.value !== null ? String(entry.value) : 'false'
   return {
     ...base,
@@ -30,8 +45,21 @@ const look = computed<MacroLook>(() => {
 </script>
 
 <style scoped lang="postcss">
-.macro-kind {
+.icon-face {
+  position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.icon {
+  width: 75%;
+  height: 75%;
+  min-width: 50px;
+  aspect-ratio: 1/1;
+  font-size: 28px;
 }
 </style>

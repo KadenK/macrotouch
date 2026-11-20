@@ -1,4 +1,4 @@
-import { ActionType, type Action } from '../../shared/types'
+import { ActionType, defineAction } from '../../plugin-sdk'
 
 const APP_NAME = 'MacroTouch'
 
@@ -15,9 +15,11 @@ async function notify(title: string, message: string): Promise<void> {
   })
 }
 
-const action: Action = {
-  actionId: 'sendNotification',
+const action = defineAction({
+  id: 'sendNotification',
   label: 'Send Notification',
+  description: 'Show a desktop notification.',
+  icon: 'ic:baseline-notifications',
   actionFields: [
     {
       key: 'title',
@@ -30,16 +32,12 @@ const action: Action = {
       type: ActionType.String,
     },
   ],
-  async execute(parameters: Record<string, unknown>): Promise<void> {
+  async execute(parameters): Promise<void> {
     const title = typeof parameters?.title === 'string' && parameters.title.trim() ? parameters.title.trim() : APP_NAME
     const message = typeof parameters?.message === 'string' ? parameters.message : ''
 
-    try {
-      await notify(title, message)
-    } catch (err) {
-      console.error('SendNotification.execute: failed to show notification', err)
-    }
+    await notify(title, message)
   },
-}
+})
 
 export default action

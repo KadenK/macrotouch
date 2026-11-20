@@ -11,14 +11,17 @@ export default defineNuxtPlugin(() => {
   store.setSendFn((message) => ws.send(message))
 
   ws.on('snapshot', (snapshot) => {
-    store.applySnapshot(snapshot.state, snapshot.catalogs, snapshot.actionState)
+    store.applySnapshot(snapshot.state, snapshot.catalogs, snapshot.actionState, snapshot.nodes)
     // Only a local editor is told the token (MAC-31), so this is also what
     // decides whether the connect page has a URL worth advertising.
     if (snapshot.pairingToken) setHostToken(snapshot.pairingToken)
   })
   ws.on('patch', (patch) => store.applyPatch(patch))
-  ws.on('catalogs', (catalogs) => store.applyCatalogs(catalogs))
+  ws.on('catalogs', (message) => store.applyCatalogs(message.catalogs, message.nodes))
   ws.on('actionState', (states) => store.applyActionState(states))
+  ws.on('actionResult', (result) => {
+    if (!store.applyActionResult(result) && !result.ok) store.reportActionError(result.error.message)
+  })
   // After a regeneration, so the connect page redraws its QR without reconnecting.
   ws.on('pairingToken', (token) => setHostToken(token))
   ws.on('error', (error) => console.warn(`[protocol] ${error.code}: ${error.message}`))

@@ -51,8 +51,13 @@ model {
       technology 'master-server/action-server-launcher.ts'
     }
 
+    pluginRegistry = service 'PluginRegistry' {
+      description 'Installs and removes plugins, serves their files, and tells each action server which plugins it should have'
+      technology 'master-server/plugin-registry.ts'
+    }
+
     router = service 'ActionRouter' {
-      description 'Finds which action server should run a macro and sends it there'
+      description 'Sends a macro to the action server it names, or answers that the action cannot run there'
       technology 'master-server/action-router.ts'
     }
 
@@ -76,12 +81,19 @@ model {
     watch -[call]-> store 'getScreen(), getMacro()'
     watch -[call]-> gateway 'send(deviceId, watch-actions)'
     router -[call]-> store 'getMacro()'
-    router -[call]-> actionServers 'get(deviceId)'
+    router -[call]-> actionServers 'get(deviceId), availability(actionId)'
+    http -[call]-> pluginRegistry 'install(package), file(path)'
+    gateway -[call]-> pluginRegistry 'sync(deviceId, installed)'
+    pluginRegistry -[call]-> store 'apply(update-plugin, delete-plugin)'
+    pluginRegistry -[call]-> gateway 'send(deviceId, plugin-sync)'
     router -[call]-> gateway 'request(deviceId, run-action)'
   }
 
   macrotouch.editor -[message]-> macrotouch.master.http 'GET pages, POST /api/pair/complete' {
     technology 'HTTP'
+  }
+  macrotouch.master.pluginRegistry -[call]-> macrotouch.plugins 'read/write' {
+    technology 'fs'
   }
   macrotouch.controller -[message]-> macrotouch.master.http 'GET pages, POST /api/pair/complete' {
     technology 'HTTP'

@@ -19,6 +19,8 @@ export default defineNuxtConfig({
     },
   },
 
+  vue: { compilerOptions: { isCustomElement: (tag) => tag.startsWith('mt-') } },
+
   postcss: {
     plugins: {
       'postcss-nested': {},

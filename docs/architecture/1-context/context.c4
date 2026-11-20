@@ -8,6 +8,10 @@ model {
     description 'The computer\'s operating system, which actions control'
   }
 
+  apps = external 'Third-party Apps' {
+    description 'Apps and services that plugins control, such as Steam, Discord, and Home Assistant'
+  }
+
   macrotouch = system 'MacroTouch' {
     description 'Turns phones and tablets on the local network into macro pads'
   }
@@ -16,7 +20,7 @@ model {
 views "1. Context" {
   view index {
     title 'System Context'
-    include user, macrotouch, os
+    include user, macrotouch, os, apps
     // Lifecycle arrows (OS starts MacroTouch at login) belong on Layer 2, not here
     exclude os -> macrotouch
     include user -> macrotouch with {
@@ -24,6 +28,9 @@ views "1. Context" {
     }
     include macrotouch -> os with {
       title 'controls keyboard, media, and apps'
+    }
+    include macrotouch -> apps with {
+      title 'controls through plugins'
     }
   }
 }

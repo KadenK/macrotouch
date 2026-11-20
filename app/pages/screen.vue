@@ -19,7 +19,7 @@
     </template>
 
     <transition name="toast-fade">
-      <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
+      <div v-if="toastMessage" class="toast" role="status">{{ toastMessage }}</div>
     </transition>
 
     <div
@@ -216,9 +216,9 @@ const tryEnterFullscreen = async () => {
 
   const request = async (el: Element) => {
     try {
-      await (el as any).requestFullscreen?.({ navigationUI: 'hide' })
+      await el.requestFullscreen?.({ navigationUI: 'hide' })
       return true
-    } catch (e) {
+    } catch {
       return false
     }
   }
@@ -297,9 +297,17 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (toastTimeout !== null) clearTimeout(toastTimeout)
   removeFullscreenChangeListener?.()
   store.setViewedScreen(null)
 })
+
+watch(
+  () => store.actionError,
+  (error) => {
+    if (error) showToast(error.message)
+  },
+)
 
 // Tells the master which screen's stateful actions to watch.
 watch(currentScreenId, (id) => store.setViewedScreen(id || null), { immediate: true })
@@ -374,9 +382,11 @@ watch(screenList, (list) => {
   transform: translateX(-50%);
   max-width: 90vw;
   padding: 0.75rem 1.1rem;
-  background: rgba(33, 33, 33, 0.9);
-  color: #fff;
-  border-radius: 9999px;
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 1rem;
+  overflow-wrap: anywhere;
   font-size: 0.9rem;
   text-align: center;
   z-index: 9999;

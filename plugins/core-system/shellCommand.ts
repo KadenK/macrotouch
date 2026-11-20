@@ -1,10 +1,10 @@
-import { ActionType, type Action } from '../../shared/types'
-import { getDefaultShell, getPlatform } from '../../shared/platform'
-import { executeCommand } from './commandExecutor'
+import { ActionType, defineAction } from '../../plugin-sdk'
 
-const action: Action = {
-  actionId: 'shellCommand',
+const action = defineAction({
+  id: 'shellCommand',
   label: 'Shell Command',
+  description: 'Run a shell command.',
+  icon: 'ic:baseline-terminal',
   actionFields: [
     {
       key: 'command',
@@ -12,21 +12,11 @@ const action: Action = {
       type: ActionType.String,
     },
   ],
-  async execute(parameters: Record<string, unknown>): Promise<void> {
+  async execute(parameters, ctx) {
     const command = parameters?.command
-    if (!command || typeof command !== 'string') {
-      console.warn('ShellCommand.execute: missing or invalid command parameter')
-      return
-    }
-
-    try {
-      const currentPlatform = getPlatform()
-      console.log('ShellCommand running on platform:', currentPlatform)
-      await executeCommand(command)
-    } catch (err) {
-      console.error('ShellCommand.execute: failed to launch command', err)
-    }
+    if (!command || typeof command !== 'string') throw new Error('Missing or invalid command parameter')
+    await ctx.exec(command)
   },
-}
+})
 
 export default action

@@ -1,4 +1,4 @@
-import type { Macro, MacroScreen, MacroState, ScreenRow } from '../shared/types'
+import type { InstalledPlugin, Macro, MacroScreen, MacroState, ScreenRow } from '../shared/types'
 import { applyAssignments, fits, isUnitSpan, planMove, resolveLayout } from '../shared/layout'
 import type { ProtocolError, StateCommand, StatePatch } from '../shared/protocol'
 import { emptyState } from './state-file'
@@ -59,6 +59,27 @@ export class StateStore {
 
   applyCommand(cmd: StateCommand): StatePatch | ProtocolError {
     switch (cmd.type) {
+      case 'update-plugin': {
+        const plugin =
+          this.state.plugins && Object.hasOwn(this.state.plugins, cmd.pluginId)
+            ? this.state.plugins[cmd.pluginId]
+            : undefined
+        if (!plugin) return err('unknown-plugin', `No plugin ${cmd.pluginId}`)
+        if (plugin.settingFields?.some((field) => field.secret && Object.hasOwn(cmd.settings ?? {}, field.key)))
+          return err('invalid-message', 'Secret settings cannot be stored')
+        return this.upsertPlugin({
+          ...plugin,
+          enabled: cmd.enabled ?? plugin.enabled,
+          settings: { ...plugin.settings, ...cmd.settings },
+        })
+      }
+      case 'delete-plugin': {
+        if (!this.state.plugins || !Object.hasOwn(this.state.plugins, cmd.pluginId))
+          return err('unknown-plugin', `No plugin ${cmd.pluginId}`)
+        const { [cmd.pluginId]: _removed, ...remaining } = this.state.plugins
+        this.state.plugins = remaining
+        return { type: 'state-patch', plugins: { [cmd.pluginId]: null } }
+      }
       case 'upsert-macro':
         return this.upsertMacro(cmd)
       case 'delete-macro':
@@ -78,6 +99,12 @@ export class StateStore {
         return err('invalid-message', `Unknown command: ${JSON.stringify(never)}`)
       }
     }
+  }
+
+  upsertPlugin(plugin: InstalledPlugin): StatePatch {
+    this.state.plugins ??= {}
+    this.state.plugins[plugin.id] = plugin
+    return { type: 'state-patch', plugins: { [plugin.id]: plugin } }
   }
 
   private upsertMacro(cmd: Extract<StateCommand, { type: 'upsert-macro' }>): StatePatch | ProtocolError {

@@ -17,5 +17,5 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["shared/**/*.ts", "master-server/**/*.ts", "action-server/**/*.ts"]
+  "include": ["shared/**/*.ts", "master-server/**/*.ts", "action-server/**/*.ts", "plugin-sdk/**/*.ts", "plugins/**/*.ts"]
 }

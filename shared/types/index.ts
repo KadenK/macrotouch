@@ -1,6 +1,7 @@
 export * from './common'
 export * from './macro'
 export * from './action'
+export * from './plugin'
 export * from './node'
 export * from './actionState'
 export * from './screen'

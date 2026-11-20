@@ -70,6 +70,23 @@ export interface UpdateSettingsCommand {
   settings: Partial<MacroSettings>
 }
 
+/**
+ * Enable or disable an installed plugin, or change its non-secret settings.
+ * Fields left out keep their value; `settings` keys are merged. Local editor only.
+ */
+export interface UpdatePluginCommand {
+  type: 'update-plugin'
+  pluginId: string
+  enabled?: boolean
+  settings?: Record<string, unknown>
+}
+
+/** Uninstall a plugin from the master and every action server. Local editor only. */
+export interface DeletePluginCommand {
+  type: 'delete-plugin'
+  pluginId: string
+}
+
 export type StateCommand =
   | UpsertMacroCommand
   | DeleteMacroCommand
@@ -78,5 +95,7 @@ export type StateCommand =
   | UpsertScreenCommand
   | DeleteScreenCommand
   | UpdateSettingsCommand
+  | UpdatePluginCommand
+  | DeletePluginCommand
 
 export type StateCommandType = StateCommand['type']

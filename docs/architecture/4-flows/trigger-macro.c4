@@ -16,8 +16,16 @@ views "4. Flows" {
         macrotouch.master.gateway -> macrotouch.action.masterLink 'run-action: actionId, params'
         macrotouch.action.masterLink -> macrotouch.action.runner 'run'
         macrotouch.action.runner -> macrotouch.action.catalog 'look up action'
-        macrotouch.action.runner -> macrotouch.action.actions 'execute(params)'
-        macrotouch.action.actions -> os 'perform'
+        macrotouch.action.runner -> macrotouch.action.checks 'ready(action)'
+        alt {
+          when 'ready' {
+            macrotouch.action.runner -> macrotouch.action.actions 'execute(params)'
+            macrotouch.action.actions -> os 'perform'
+          }
+          else 'not ready or missing' {
+            macrotouch.action.runner -> macrotouch.action.runner 'error: action-unavailable'
+          }
+        }
         macrotouch.action.masterLink <- macrotouch.action.runner 'result / error'
         macrotouch.master.gateway <- macrotouch.action.masterLink 'action-result'
         macrotouch.controller.ws <- macrotouch.master.gateway 'action-result'

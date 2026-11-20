@@ -2,6 +2,7 @@ import { DEFAULT_MASTER } from '../shared/websocket'
 import { connectToMaster, nodeId } from './master-link'
 import { StateMonitor } from './monitor'
 import { run } from './runner'
+import { PluginHost } from './plugin-host'
 
 /**
  * The Action Server process.
@@ -12,19 +13,33 @@ import { run } from './runner'
  */
 
 const url = process.env.MACROTOUCH_MASTER_URL || `ws://${DEFAULT_MASTER.host}:${DEFAULT_MASTER.wsPort}`
-const monitor = new StateMonitor(nodeId, (states) => link.sendState(states))
-const link = connectToMaster(url, {
+const host = new PluginHost()
+await host.load()
+const monitor = new StateMonitor(host, nodeId, (states) => link.sendState(states))
+const link = connectToMaster(url, host, {
   onRun: (msg) =>
-    void run(msg.actionId, msg.parameters).then(() => {
+    void run(
+      host,
+      msg.actionId,
+      msg.value === undefined ? msg.parameters : { ...msg.parameters, value: msg.value },
+    ).then((outcome) => {
+      link.sendResult({
+        type: 'action-result',
+        requestId: msg.requestId,
+        ...outcome,
+      })
       // Report the effect of a tap now rather than at the next poll.
       monitor.refresh(msg.actionId)
     }),
   onWatch: (msg) => monitor.setWatched(msg.actions),
 })
 
+host.onReload((id, before) => monitor.pluginReload(id, before))
+host.onChange(() => link.resendHello())
 const stop = () => {
   monitor.stop()
   link.close()
+  void host.dispose()
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)

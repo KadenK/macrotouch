@@ -6,8 +6,23 @@ model {
       technology 'action-server/master-link.ts'
     }
 
+    pluginHost = service 'PluginHost' {
+      description 'Keeps this computer\'s plugin copies matching the master, loads them, and starts and stops them'
+      technology 'action-server/plugin-host.ts'
+    }
+
+    checks = module 'CompatibilityChecks' {
+      description 'Checks whether this computer can run a plugin or action, now and in general, using the checks the plugin declares'
+      technology 'action-server/checks.ts'
+    }
+
+    pluginSettings = service 'PluginSettings' {
+      description 'Keeps each plugin\'s settings and secrets for this computer'
+      technology 'action-server/plugin-settings.ts'
+    }
+
     catalog = service 'ActionCatalog' {
-      description 'Loads all action packages and lists the actions this computer can run'
+      description 'Lists the actions of every loaded plugin, and whether each can run on this computer'
       technology 'action-server/catalog.ts'
     }
 
@@ -17,8 +32,8 @@ model {
     }
 
     monitor = service 'StateMonitor' {
-      description 'Checks the live state of on-screen actions and reports changes'
-      technology 'action-server/state-monitor.ts'
+      description 'Reads or subscribes to the live state of on-screen actions and reports changes'
+      technology 'action-server/monitor.ts'
     }
 
     credential = service 'Credential' {
@@ -27,30 +42,48 @@ model {
     }
 
     actions = module 'Actions' {
-      description 'The loaded action code, from any package'
-      technology 'imported package code'
+      description 'The loaded action code, from built-in and installed plugins alike'
+      technology 'plugin server.mjs'
     }
 
     masterLink -[call]-> credential 'secret(), enroll(token)'
     masterLink -[call]-> catalog 'toCatalog()'
-    masterLink -[call]-> runner 'run(id, params)'
+    masterLink -[call]-> runner 'run(id, params), listOptions()'
+    masterLink -[call]-> pluginHost 'sync(plugin-sync)'
+    masterLink -[call]-> pluginSettings 'setSecrets()'
+    pluginHost -[call]-> checks 'requires(plugin)'
+    pluginHost -[call]-> pluginSettings 'get(pluginId)'
+    pluginHost -[call]-> actions 'activate(ctx), dispose()'
+    pluginHost -[event]-> masterLink 'catalog changed'
+    catalog -[call]-> pluginHost 'loaded()'
+    catalog -[call]-> checks 'availability(action)'
+    runner -[call]-> checks 'ready(action)'
     runner -[call]-> catalog 'get(id)'
     runner -[call]-> actions 'execute(params)'
     masterLink -[call]-> monitor 'setWatched(list)'
     monitor -[call]-> catalog 'get(id)'
-    monitor -[call]-> actions 'getState(), getAppearance()'
+    monitor -[call]-> actions 'get(), subscribe()'
     monitor -[event]-> masterLink 'change'
   }
 
-  macrotouch.action.masterLink -[message]<-> macrotouch.master.gateway 'hello (with secret), enroll, enrolled, run-action, action-result, watch-actions, action-state' {
+  macrotouch.action.masterLink -[message]<-> macrotouch.master.gateway 'hello (with secret and catalog), enroll, enrolled, plugin-sync, plugin-secrets, run-action, list-options, test-plugin, action-result, watch-actions, action-state' {
     technology 'WebSocket'
   }
   macrotouch.action.credential -[call]-> macrotouch.actionSecret 'read/write' {
     technology 'fs'
   }
-  macrotouch.action.catalog -[call]-> macrotouch.plugins 'import()'
-  macrotouch.action.catalog -[call]-> macrotouch.action.actions 'registers'
+  macrotouch.action.pluginHost -[message]-> macrotouch.master.http 'GET plugin package' {
+    technology 'HTTP'
+  }
+  macrotouch.action.pluginHost -[call]-> macrotouch.pluginCopies 'write, import()' {
+    technology 'fs'
+  }
+  macrotouch.action.pluginSettings -[call]-> macrotouch.pluginSecrets 'read/write' {
+    technology 'fs'
+  }
+  macrotouch.action.checks -[call]-> os 'look for files, commands, processes'
   macrotouch.action.actions -[call]-> os 'OS commands and APIs'
+  macrotouch.action.actions -[message]-> apps 'app and service APIs'
 }
 
 views "3. Components" {

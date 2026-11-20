@@ -29,6 +29,11 @@ export interface RunAction {
   requestId: RequestId
   actionId: string
   parameters?: Record<string, unknown>
+  /**
+   * The value a continuous control (slider) was set to, from `macro-trigger`.
+   * The action server passes it to the handler as `parameters.value`.
+   */
+  value?: ActionStateValue
 }
 
 /**

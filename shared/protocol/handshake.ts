@@ -1,4 +1,5 @@
-import type { ActionCatalog, NodeId } from '../types/node'
+import type { ActionCatalog, NodeId, NodeInfo } from '../types/node'
+import type { NodePluginInfo } from './plugins'
 import type { ActionStateEntry, ActionStateKey } from '../types/actionState'
 import type { MacroState } from '../types/state'
 import type { OSPlatform } from '../platform'
@@ -41,6 +42,10 @@ export type NodeHello = HelloBase & {
   label: string
   platform: OSPlatform
   catalog: ActionCatalog
+  /** Installed (non-built-in) plugins it has on disk, so the master can send only what is missing. */
+  plugins?: NodePluginInfo[]
+  /** Set by the action server the master launched itself (`MACROTOUCH_LOCAL_NODE=1`). */
+  local?: boolean
 }
 
 export type Hello = EditorHello | ControllerHello | NodeHello
@@ -64,6 +69,8 @@ export interface Snapshot {
   state: MacroState
   /** Editor only. One catalog per connected node; empty when none is connected. */
   catalogs?: Record<NodeId, ActionCatalog>
+  /** Editor only. The connected nodes, for labels, platforms and which one is local. */
+  nodes?: NodeInfo[]
   /**
    * Editor only. The token a remote client needs, so the connect page can put
    * it in the URL it advertises. Sent to local editors only — an editor that
@@ -86,4 +93,5 @@ export interface Snapshot {
 export interface CatalogsMessage {
   type: 'catalogs'
   catalogs: Record<NodeId, ActionCatalog>
+  nodes: NodeInfo[]
 }

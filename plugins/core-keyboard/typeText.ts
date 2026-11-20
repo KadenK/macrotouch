@@ -1,5 +1,4 @@
-import { ActionType, type Action } from '../../shared/types'
-import { executeCommand } from './commandExecutor'
+import { ActionType, defineAction, type Parameters } from '../../plugin-sdk'
 
 const escapeAppleScriptText = (text: string) => text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 
@@ -16,9 +15,17 @@ const escapeWindowsSendKeys = (text: string) => {
     .replace(/\)/g, '{)}')
 }
 
-const action: Action = {
-  actionId: 'typeText',
+const getText = (parameters: Parameters): string => {
+  const text = parameters?.text
+  if (!text || typeof text !== 'string') throw new Error('Missing or invalid text parameter')
+  return text
+}
+
+const action = defineAction({
+  id: 'typeText',
   label: 'Type Text',
+  description: 'Type the specified text.',
+  icon: 'ic:baseline-text-fields',
   actionFields: [
     {
       key: 'text',
@@ -26,48 +33,30 @@ const action: Action = {
       type: ActionType.String,
     },
   ],
-  async execute(parameters: Record<string, unknown>): Promise<void> {
-    const text = parameters?.text
-    if (!text || typeof text !== 'string') {
-      console.warn('TypeText.execute: missing or invalid text parameter')
-      return
-    }
-
-    try {
-      if (process.platform === 'darwin') {
-        const script = `tell application "System Events" to keystroke "${escapeAppleScriptText(text)}"`
-        await executeCommand(`osascript -e "${script.replace(/\"/g, '\\\"')}"`)
-        return
-      }
-
-      if (process.platform === 'win32') {
-        const sequence = escapeWindowsSendKeys(text)
-        const command = `[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sequence.replace(/'/g, "''")}')`
-        await executeCommand(`powershell -NoProfile -Command "${command.replace(/\"/g, '\\\"')}"`)
-        return
-      }
-
-      if (process.platform === 'linux') {
+  impl: {
+    darwin: async (parameters, ctx) => {
+      const text = getText(parameters)
+      const script = `tell application "System Events" to keystroke "${escapeAppleScriptText(text)}"`
+      await ctx.spawn('osascript', ['-e', script])
+    },
+    win32: async (parameters, ctx) => {
+      const sequence = escapeWindowsSendKeys(getText(parameters))
+      const command = `[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sequence.replace(/'/g, "''")}')`
+      await ctx.spawn('powershell', ['-NoProfile', '-Command', command])
+    },
+    linux: async (parameters, ctx) => {
+      const text = getText(parameters)
+      try {
+        await ctx.spawn('xdotool', ['type', '--clearmodifiers', text])
+      } catch {
         try {
-          await executeCommand(`xdotool type --clearmodifiers "${text.replace(/"/g, '\\"')}"`)
-          return
-        } catch (error) {
-          console.warn('TypeText.execute xdotool failed, trying ydotool fallback', error)
-          try {
-            await executeCommand(`ydotool type "${text.replace(/"/g, '\\"')}"`)
-            return
-          } catch (err2) {
-            console.error('TypeText.execute failed on Linux', err2)
-            return
-          }
+          await ctx.spawn('ydotool', ['type', text])
+        } catch {
+          throw new Error('Neither xdotool nor ydotool could type the text')
         }
       }
-
-      console.warn('TypeText.execute: Unsupported platform', process.platform)
-    } catch (err) {
-      console.error('TypeText.execute: failed to type text', err)
-    }
+    },
   },
-}
+})
 
 export default action

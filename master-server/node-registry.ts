@@ -1,5 +1,6 @@
 import type { NodeHello } from '../shared/protocol'
 import type { ActionCatalog, NodeId, NodeInfo } from '../shared/types/node'
+import { isSelectable } from '../shared/types/plugin'
 import { findActionState } from '../shared/types/action'
 
 export type NodeSocket = {
@@ -20,7 +21,12 @@ export class NodeRegistry {
 
   register(socket: NodeSocket, hello: NodeHello): void {
     this.nodes.set(socket, {
-      info: { nodeId: hello.nodeId, label: hello.label, platform: hello.platform, local: true },
+      info: {
+        nodeId: this.nodes.get(socket)?.info.nodeId ?? hello.nodeId,
+        label: hello.label,
+        platform: hello.platform,
+        local: hello.local === true,
+      },
       catalog: hello.catalog,
     })
     this.notify()
@@ -30,11 +36,22 @@ export class NodeRegistry {
     if (this.nodes.delete(socket)) this.notify()
   }
 
-  getLocal(): { socket: NodeSocket; info: NodeInfo } | undefined {
-    for (const [socket, { info }] of this.nodes) {
-      if (socket.readyState === 1) return { socket, info }
+  getLocal(): { socket: NodeSocket; info: NodeInfo; catalog: ActionCatalog } | undefined {
+    for (const [socket, { info, catalog }] of this.nodes) {
+      if (socket.readyState === 1 && info.local) return { socket, info, catalog }
     }
     return undefined
+  }
+
+  getById(id: string): { socket: NodeSocket; info: NodeInfo; catalog: ActionCatalog } | undefined {
+    for (const [socket, { info, catalog }] of this.nodes) {
+      if (socket.readyState === 1 && info.nodeId === id) return { socket, info, catalog }
+    }
+    return undefined
+  }
+
+  infos(): NodeInfo[] {
+    return [...this.nodes.values()].map(({ info }) => info)
   }
 
   /** True while any node is registered. */
@@ -47,11 +64,19 @@ export class NodeRegistry {
   }
 
   /** The first connected node that can report state for `actionId` run with `parameters`. */
-  findStateful(actionId: string, parameters?: Record<string, unknown>): NodeSocket | undefined {
+  findStateful(actionId: string, parameters?: Record<string, unknown>, nodeId?: string): NodeSocket | undefined {
+    const target = nodeId === undefined ? this.getLocal() : this.getById(nodeId)
     for (const [socket, { catalog }] of this.nodes) {
-      if (socket.readyState !== 1) continue
-      const found = catalog.groups.some((group) =>
-        group.actions.some((action) => action.actionId === actionId && !!findActionState(action.states, parameters)),
+      if (socket !== target?.socket || socket.readyState !== 1) continue
+      const found = catalog.groups.some(
+        (group) =>
+          isSelectable(group.availability) &&
+          group.actions.some(
+            (action) =>
+              isSelectable(action.availability) &&
+              action.actionId === actionId &&
+              !!findActionState(action.states, parameters),
+          ),
       )
       if (found) return socket
     }

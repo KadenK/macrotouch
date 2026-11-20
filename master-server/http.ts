@@ -2,6 +2,8 @@ import fs from 'fs'
 import http from 'http'
 import os from 'os'
 import path from 'path'
+import type { PluginRegistry } from './plugin-registry'
+import { isSafePluginPath } from '../shared/types/plugin'
 import { isLoopback, type PairingToken } from './pairing'
 
 /**
@@ -78,7 +80,7 @@ const DENIED_PAGE = `<!doctype html>
 <p>Open the Connect page on the host computer and scan the QR code again.</p>
 `
 
-export function startHttpServer(port: number, staticDir: string, pairing: PairingToken) {
+export function startHttpServer(port: number, staticDir: string, pairing: PairingToken, plugins: PluginRegistry) {
   const root = path.resolve(staticDir)
 
   const sendFile = (res: http.ServerResponse, filePath: string, headOnly: boolean) => {
@@ -103,6 +105,30 @@ export function startHttpServer(port: number, staticDir: string, pairing: Pairin
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405).end()
+      return
+    }
+
+    if (pathname.startsWith('/plugins/')) {
+      try {
+        const parts = decodeURIComponent(pathname).split('/')
+        const id = parts[2] ?? ''
+        const sha = parts[3] ?? ''
+        const relPath = parts.slice(4).join('/')
+        const files = isSafePluginPath(relPath) ? plugins.get(id, sha) : undefined
+        if (!files || !Object.hasOwn(files, relPath)) {
+          res.writeHead(404).end()
+          return
+        }
+        res.writeHead(200, {
+          'Content-Type': MIME[path.extname(relPath).toLowerCase()] ?? 'application/octet-stream',
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          // Lets an app served from another port (`npm run dev`) import plugin UI modules.
+          'Access-Control-Allow-Origin': '*',
+        })
+        res.end(req.method === 'HEAD' ? undefined : Buffer.from(files[relPath]!, 'base64'))
+      } catch {
+        res.writeHead(404).end()
+      }
       return
     }
 

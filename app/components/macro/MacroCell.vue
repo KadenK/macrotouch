@@ -31,6 +31,10 @@
     -->
     <template v-if="mode === 'edit' && macro">
       <div class="resize-frame" />
+      <!-- Above the resize handles, so hovering it shows why the macro can't run. -->
+      <span v-if="missingAction" class="missing-badge" role="img" :aria-label="missingAction" tabindex="0"
+        >!<span class="missing-tooltip" role="tooltip">{{ missingAction }}</span></span
+      >
       <div
         v-for="zone in zones"
         :key="zone.name"
@@ -58,13 +62,13 @@ import { computed, ref } from 'vue'
 import type { Edges } from '~/../shared/layout'
 import { useMacroStore } from '~/stores/macro'
 import MacroEditModal from './MacroEditModal.vue'
-import { useMacroKind, type MacroDisplayProps } from '~/composables/useMacroKind'
+import { useMacroFace, type MacroDisplayProps } from '~/composables/useMacroFace'
 import type { ActionStateValue, Macro, Position } from '~/../shared/types'
 
 /**
- * One grid cell: an empty slot, or a macro drawn by the widget for its kind of
- * live state (see `composables/useMacroKind.ts`). In the editor a click opens
- * the macro's settings; on the remote the macro's own component decides when
+ * One grid cell: an empty slot, or a macro drawn by its face
+ * (see `composables/useMacroFace.ts`). In the editor a click opens
+ * the macro's settings; on the remote the face decides when
  * it runs.
  */
 const {
@@ -106,7 +110,7 @@ const macro = computed<Macro | undefined>(() => (macroId ? store.getMacro(macroI
 // visibility (not v-if) keeps the cell's grid slot so other buttons stay in place.
 const isHiddenBlank = computed(() => mode === 'interact' && !macro.value && store.settings.hideBlankButtons)
 
-const display = computed(() => useMacroKind(macro.value?.stateKind).display)
+const display = computed(() => useMacroFace(macro.value?.face, macro.value?.stateKind).display)
 
 const displayProps = computed<MacroDisplayProps | undefined>(() => {
   const m = macro.value
@@ -118,6 +122,28 @@ const displayProps = computed<MacroDisplayProps | undefined>(() => {
     // Labels follow the editor/remote setting.
     showLabel: mode === 'edit' ? store.settings.showEditorLabels : store.settings.showRemoteLabels,
   }
+})
+
+/**
+ * Editor only: why the macro can't run, when its action server is connected but
+ * no longer has its action (the plugin was uninstalled or disabled). The macro
+ * keeps its action and settings, so reinstalling the plugin brings it back.
+ * An offline action server shows nothing here; its catalog is simply unknown.
+ */
+const missingAction = computed(() => {
+  const m = macro.value
+  if (mode !== 'edit' || !m?.actionId) return ''
+  const nodeId = m.nodeId ?? store.localNode?.nodeId
+  const catalog = nodeId ? store.catalogs[nodeId] : undefined
+  if (!catalog || catalog.groups.some((group) => group.actions.some((action) => action.actionId === m.actionId)))
+    return ''
+  const pluginId = m.actionId.split('/')[0]
+  const plugin = pluginId ? store.plugins[pluginId] : undefined
+  const node = store.nodes.find((item) => item.nodeId === nodeId)
+  const where = store.nodes.length > 1 && node ? ` on ${node.local ? 'this computer' : node.label}` : ''
+  return plugin && !plugin.enabled
+    ? `${plugin.label} is disabled, so this macro can't run`
+    : `The plugin for this macro isn't installed${where}, so it can't run`
 })
 
 const isModalOpen = ref(false)
@@ -147,6 +173,55 @@ function handleTrigger(value?: ActionStateValue) {
   min-height: 0;
   min-width: 0;
   position: relative;
+}
+
+.missing-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+/* Shown at once on hover or keyboard focus, below the badge and inside the cell's width. */
+.missing-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: 14rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-strong);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.35);
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.missing-badge:hover .missing-tooltip,
+.missing-badge:focus-visible .missing-tooltip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .macro-container--dragging {

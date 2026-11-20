@@ -4,6 +4,8 @@ import { DEFAULT_MASTER, HTTP_PORT, WEBSOCKET_PORT } from '../shared/websocket'
 import { createActionServerLauncher } from './action-server-launcher'
 import { startGateway } from './gateway'
 import { startHttpServer } from './http'
+import { PluginRegistry } from './plugin-registry'
+import { resolveDataRoot } from './state-file'
 import { PairingToken } from './pairing'
 
 /**
@@ -26,7 +28,8 @@ const staticDir = process.env.MACROTOUCH_STATIC_DIR || path.join(here, '..', '.o
 // websocket at the same moment, or a revoked device keeps one of the two.
 const pairing = new PairingToken()
 
-const http = startHttpServer(httpPort, staticDir, pairing)
+const plugins = new PluginRegistry(resolveDataRoot())
+const http = startHttpServer(httpPort, staticDir, pairing, plugins)
 http.on('error', (err: NodeJS.ErrnoException) => {
   console.error(`[HTTP] cannot listen on port ${httpPort}:`, err.message)
   process.exit(1)
@@ -45,6 +48,7 @@ const stop = async () => {
 
 const gateway = startGateway(wsPort, {
   pairing,
+  plugins,
   onQuit: () => {
     console.log('Quit requested, shutting down')
     void stop()

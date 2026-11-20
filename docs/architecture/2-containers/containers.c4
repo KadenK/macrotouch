@@ -26,9 +26,19 @@ model {
       technology 'Vue SPA'
     }
 
-    plugins = datastore 'Action Packages' {
-      description 'Built-in and user-installed action packages; each is a package.json and one bundled JS file'
-      technology 'app/actions, ~/.macroTouch/plugins'
+    plugins = datastore 'Plugin Packages' {
+      description 'Every plugin installed from the editor, kept by the master and copied to each action server'
+      technology '~/.macroTouch/plugins'
+    }
+
+    pluginCopies = datastore 'Plugin Copies' {
+      description 'The plugins this action server runs: built-in ones plus its copy of each installed one'
+      technology 'plugins/core-*, action server data folder'
+    }
+
+    pluginSecrets = datastore 'Plugin Secrets' {
+      description 'Tokens and passwords that plugins use on this computer'
+      technology 'file, mode 0600'
     }
 
     desktopSettings = datastore 'Desktop Settings' {
@@ -84,16 +94,19 @@ views "2. Containers" {
     include *, user, os
     // Summary titles for edges that roll up from Level 3 as [...]
     include macrotouch.editor -> macrotouch.master with {
-      title 'pairs, loads pages, syncs edits'
+      title 'pairs, loads pages and plugin faces, syncs edits, installs plugins'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.controller -> macrotouch.master with {
-      title 'pairs, loads pages, sends taps, gets live state'
+      title 'pairs, loads pages and plugin faces, sends taps, gets live state'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.action -> macrotouch.master with {
-      title 'enrolls, runs actions, reports live state'
+      title 'enrolls, gets plugins, runs actions, reports live state'
       technology 'WebSocket'
+    }
+    include macrotouch.action -> os with {
+      title 'checks for apps and tools, runs OS commands'
     }
     include macrotouch.electron -> macrotouch.master with {
       title 'starts if not running, claims a new install, sends quit'
