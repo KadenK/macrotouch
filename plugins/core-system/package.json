@@ -1,0 +1,18 @@
+{
+  "name": "@macrotouch/plugin-core-system",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "macrotouch": {
+    "id": "core-system",
+    "label": "System",
+    "icon": "ic:baseline-settings",
+    "apiVersion": 1,
+    "checks": {},
+    "actions": {
+      "launchApp": {},
+      "shellCommand": {},
+      "sendNotification": {}
+    }
+  }
+}

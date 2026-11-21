@@ -2,7 +2,7 @@
   <div class="settings-page">
     <SidebarContent>
       <SidebarSection title="Settings">
-        <SidebarItem v-for="s in sections" :key="s.id" :selected="s.id === section" @click="section = s.id">
+        <SidebarItem v-for="s in visibleSections" :key="s.id" :selected="s.id === section" @click="section = s.id">
           {{ s.label }}
         </SidebarItem>
       </SidebarSection>
@@ -54,6 +54,8 @@
           </p>
         </SettingsGroup>
       </template>
+
+      <PluginsSettings v-else-if="section === 'plugins' && hostToken" />
 
       <!-- Remote -->
       <template v-else-if="section === 'remote'">
@@ -117,6 +119,7 @@ import SidebarContent from '~/components/layout/SidebarContent.vue'
 import GridSizeInput from '~/components/screen/GridSizeInput.vue'
 import SettingRow from '~/components/settings/SettingRow.vue'
 import SettingsGroup from '~/components/settings/SettingsGroup.vue'
+import PluginsSettings from '~/components/settings/plugins/PluginsSettings.vue'
 import SidebarItem from '~/components/ui/SidebarItem.vue'
 import SidebarSection from '~/components/ui/SidebarSection.vue'
 import ToggleSwitch from '~/components/ui/ToggleSwitch.vue'
@@ -128,9 +131,11 @@ const sections = [
   { id: 'editor', label: 'Editor' },
   { id: 'remote', label: 'Remote' },
   { id: 'defaults', label: 'Defaults' },
+  { id: 'plugins', label: 'Plugins' },
 ] as const
 
 const section = ref<(typeof sections)[number]['id']>('editor')
+const visibleSections = computed(() => sections.filter((item) => item.id !== 'plugins' || hostToken.value))
 const currentLabel = computed(() => sections.find((s) => s.id === section.value)?.label)
 
 const { isDark, toggle: toggleTheme } = useTheme()

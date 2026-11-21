@@ -21,6 +21,7 @@ import type { CatalogsMessage, ControllerHello, EditorHello, Hello, NodeHello, S
 import type { Quit } from './lifecycle'
 import type { PairingTokenMessage, RegenerateToken } from './pairing'
 import type { StatePatch } from './sync'
+import type { InstallPlugin, ListOptions, PluginSecrets, PluginSync, TestPlugin } from './plugins'
 
 export * from './version'
 export * from './errors'
@@ -30,6 +31,7 @@ export * from './sync'
 export * from './actions'
 export * from './lifecycle'
 export * from './pairing'
+export * from './plugins'
 
 /**
  * Messages are grouped by direction, not pooled into one union.
@@ -40,7 +42,16 @@ export * from './pairing'
 
 /** Editor or controller to master. */
 export type ClientToMasterMessage =
-  EditorHello | ControllerHello | StateCommand | MacroTrigger | ViewScreen | RegenerateToken
+  | EditorHello
+  | ControllerHello
+  | StateCommand
+  | MacroTrigger
+  | ViewScreen
+  | RegenerateToken
+  | InstallPlugin
+  | PluginSecrets
+  | ListOptions
+  | TestPlugin
 
 /** Master to editor or controller. */
 export type MasterToClientMessage =
@@ -56,7 +67,8 @@ export type MasterToClientMessage =
 export type NodeToMasterMessage = NodeHello | ActionResult | ActionStateMessage
 
 /** Master to Action Server. */
-export type MasterToNodeMessage = RunAction | WatchActions | Quit
+export type MasterToNodeMessage =
+  RunAction | WatchActions | Quit | PluginSync | PluginSecrets | ListOptions | TestPlugin
 
 /** Electron to master. */
 export type DesktopToMasterMessage = Quit

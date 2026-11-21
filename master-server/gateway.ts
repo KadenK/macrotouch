@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws'
+import type { NodeHello, MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../shared/protocol'
+import { PluginRegistry } from './plugin-registry'
 import type { Macro } from '../shared/types'
-import type { MasterToClientMessage, ProtocolError, ProtocolRole, StateCommand } from '../shared/protocol'
 import { PROTOCOL_VERSION } from '../shared/protocol'
 import { ActionStateHub } from './action-state'
 import { ActionRouter } from './action-router'
@@ -43,19 +44,24 @@ const COMMAND_TYPES = new Set<StateCommand['type']>([
   'upsert-screen',
   'delete-screen',
   'update-settings',
+  'update-plugin',
+  'delete-plugin',
 ])
 
 export type GatewayOptions = {
   /** Shared with the HTTP server, so a regeneration takes effect on both at once. */
   pairing: PairingToken
+  plugins?: PluginRegistry
   /** Called when Electron on this computer asks the master to stop. */
   onQuit?: () => void
 }
 
 export function startGateway(port: number, options: GatewayOptions) {
   const { pairing } = options
+  const plugins = options.plugins ?? new PluginRegistry(new StateFile().dataRoot)
   const stateFile = new StateFile()
   const store = new StateStore(stateFile.load())
+  plugins.setCurrentState(() => store.getState().plugins)
   const nodes = new NodeRegistry()
   const router = new ActionRouter(nodes)
 
@@ -105,11 +111,63 @@ export function startGateway(port: number, options: GatewayOptions) {
     }
   }
 
+  const nodePlugins = new Map<WebSocketConnection, NodeHello['plugins']>()
+  // Track attempts only across node hellos, not broadcasts, which may overlap in flight.
+  const syncProgress = new Map<
+    WebSocketConnection,
+    {
+      sent: Set<string>
+      failures: Map<string, number>
+      blocked: Set<string>
+    }
+  >()
+  const syncNode = (socket: WebSocketConnection) => {
+    const present = nodePlugins.get(socket) ?? []
+    const progress = syncProgress.get(socket)!
+    let bytes = 0
+    let included = 0
+    const desired = Object.values(store.getState().plugins ?? {})
+      .filter((plugin) => plugin.enabled)
+      .flatMap((plugin) => {
+        const files = plugins.get(plugin.id, plugin.sha256)
+        if (!files) return []
+        const key = JSON.stringify([plugin.id, plugin.sha256])
+        const missing = !present.some((item) => item.id === plugin.id && item.sha256 === plugin.sha256)
+        const size = Object.values(files).reduce((sum, data) => sum + data.length, 0)
+        const include = missing && !progress.blocked.has(key) && (included === 0 || bytes + size <= 32 * 1024 * 1024)
+        if (include) {
+          bytes += size
+          included++
+          progress.sent.add(key)
+        }
+        return [
+          {
+            id: plugin.id,
+            sha256: plugin.sha256,
+            settings: plugin.settings,
+            ...(include ? { files } : {}),
+          },
+        ]
+      })
+    const disabled = Object.values(store.getState().plugins ?? {})
+      .filter((plugin) => !plugin.enabled)
+      .map((plugin) => plugin.id)
+    if (socket.readyState === 1) socket.send(JSON.stringify({ type: 'plugin-sync', plugins: desired, disabled }))
+  }
+  const syncAll = () => {
+    for (const socket of nodePlugins.keys()) syncNode(socket)
+  }
+
   // An action server usually registers after the editor's snapshot, so editors
   // are told whenever the set of catalogs changes.
   nodes.onChange(() => {
     for (const { socket, role } of clients.values()) {
-      if (role === 'editor') send(socket, { type: 'catalogs', catalogs: nodes.catalogs() })
+      if (role === 'editor')
+        send(socket, {
+          type: 'catalogs',
+          catalogs: nodes.catalogs(),
+          nodes: nodes.infos(),
+        })
     }
     actionState.recompute()
   })
@@ -124,7 +182,10 @@ export function startGateway(port: number, options: GatewayOptions) {
   const dropRemoteClients = () => {
     for (const { socket, fromLoopback: local } of clients.values()) {
       if (local) continue
-      sendError(socket, { code: 'invalid-token', message: 'The pairing token was regenerated' })
+      sendError(socket, {
+        code: 'invalid-token',
+        message: 'The pairing token was regenerated',
+      })
       try {
         socket.close()
       } catch {
@@ -156,7 +217,12 @@ export function startGateway(port: number, options: GatewayOptions) {
 
   wss.on('connection', (socket: WebSocketConnection, req: { socket: { remoteAddress?: string } }) => {
     const fromLoopback = isLoopback(req.socket.remoteAddress)
-    const client: Client = { socket, role: null, viewedScreenId: null, fromLoopback }
+    const client: Client = {
+      socket,
+      role: null,
+      viewedScreenId: null,
+      fromLoopback,
+    }
     clients.set(socket, client)
     console.log('WebSocket client connected')
 
@@ -171,7 +237,11 @@ export function startGateway(port: number, options: GatewayOptions) {
 
       if (msg.type === 'quit') {
         if (fromLoopback) options.onQuit?.()
-        else sendError(socket, { code: 'invalid-message', message: 'quit is only accepted from this computer' })
+        else
+          sendError(socket, {
+            code: 'invalid-message',
+            message: 'quit is only accepted from this computer',
+          })
         return
       }
 
@@ -212,10 +282,47 @@ export function startGateway(port: number, options: GatewayOptions) {
             return
           }
           client.role = 'node'
+          let progress = syncProgress.get(socket)
+          if (!progress) {
+            progress = {
+              sent: new Set(),
+              failures: new Map(),
+              blocked: new Set(),
+            }
+            syncProgress.set(socket, progress)
+          } else {
+            const desired = new Set(
+              Object.values(store.getState().plugins ?? {})
+                .filter((plugin) => plugin.enabled)
+                .map((plugin) => JSON.stringify([plugin.id, plugin.sha256])),
+            )
+            const present = new Set((msg.plugins ?? []).map((plugin) => JSON.stringify([plugin.id, plugin.sha256])))
+            for (const key of progress.sent) {
+              if (!desired.has(key) || present.has(key)) {
+                progress.failures.delete(key)
+                continue
+              }
+              const failures = (progress.failures.get(key) ?? 0) + 1
+              progress.failures.set(key, failures)
+              if (failures >= 2 && !progress.blocked.has(key)) {
+                progress.blocked.add(key)
+                console.warn(`[plugins] Node ${msg.nodeId} did not install ${key}; suppressing retries`)
+              }
+            }
+            for (const key of progress.blocked) if (!desired.has(key) || present.has(key)) progress.blocked.delete(key)
+            for (const key of progress.failures.keys())
+              if (!desired.has(key) || present.has(key)) progress.failures.delete(key)
+            progress.sent.clear()
+          }
+          nodePlugins.set(socket, msg.plugins)
           nodes.register(socket, msg)
+          syncNode(socket)
           return
         }
 
+        nodePlugins.delete(socket)
+        syncProgress.delete(socket)
+        router.disconnect(socket)
         nodes.remove(socket)
         client.role = msg.role
         if (msg.role === 'controller' && msg.screenId) client.viewedScreenId = msg.screenId
@@ -226,7 +333,7 @@ export function startGateway(port: number, options: GatewayOptions) {
           type: 'snapshot',
           protocolVersion: PROTOCOL_VERSION,
           state: store.getState(),
-          ...(msg.role === 'editor' ? { catalogs: nodes.catalogs() } : {}),
+          ...(msg.role === 'editor' ? { catalogs: nodes.catalogs(), nodes: nodes.infos() } : {}),
           // The connect page needs the token to build the URL it advertises.
           ...(isLocalEditor ? { pairingToken: pairing.value } : {}),
           // Absent, not empty, when no node is connected to produce any.
@@ -238,24 +345,104 @@ export function startGateway(port: number, options: GatewayOptions) {
 
       if (client.role === null) {
         console.warn('Message received before hello:', msg.type)
-        sendError(socket, { code: 'invalid-message', message: 'Expected hello first' })
+        sendError(socket, {
+          code: 'invalid-message',
+          message: 'Expected hello first',
+        })
         return
       }
 
       if (msg.type === 'action-result') {
-        if (client.role === 'node') console.log(`[action-server] action ${msg.requestId}: ${msg.ok ? 'ok' : 'error'}`)
-        else sendError(socket, { code: 'invalid-message', message: 'action-result requires a node connection' })
+        if (client.role === 'node') router.result(socket, msg)
+        else
+          sendError(socket, {
+            code: 'invalid-message',
+            message: 'action-result requires a node connection',
+          })
         return
       }
 
       if (msg.type === 'action-state') {
         if (client.role === 'node') actionState.ingest(socket, msg.states)
-        else sendError(socket, { code: 'invalid-message', message: 'action-state requires a node connection' })
+        else
+          sendError(socket, {
+            code: 'invalid-message',
+            message: 'action-state requires a node connection',
+          })
         return
       }
 
       if (client.role === 'node') {
-        sendError(socket, { code: 'invalid-message', message: 'node message is not supported' })
+        sendError(socket, {
+          code: 'invalid-message',
+          message: 'node message is not supported',
+        })
+        return
+      }
+
+      if (msg.type === 'install-plugin') {
+        if (!fromLoopback || client.role !== 'editor') {
+          send(socket, {
+            type: 'action-result',
+            requestId: msg.requestId,
+            ok: false,
+            error: { code: 'forbidden', message: 'Local editor required' },
+          })
+          return
+        }
+        try {
+          const plugin = plugins.install(msg.files, store.getState().plugins)
+          const patch = store.upsertPlugin(plugin)
+          stateFile.save(store.getState())
+          broadcast(patch)
+          syncAll()
+          send(socket, {
+            type: 'action-result',
+            requestId: msg.requestId,
+            ok: true,
+            value: plugin,
+          })
+        } catch (error) {
+          send(socket, {
+            type: 'action-result',
+            requestId: msg.requestId,
+            ok: false,
+            error: {
+              code: 'invalid-plugin',
+              message: error instanceof Error ? error.message : 'Invalid plugin',
+            },
+          })
+        }
+        return
+      }
+      if (msg.type === 'plugin-secrets') {
+        if (!fromLoopback || client.role !== 'editor') {
+          sendError(socket, {
+            code: 'forbidden',
+            message: 'Local editor required',
+          })
+          return
+        }
+        const targets =
+          msg.nodeId === 'all'
+            ? nodes.sockets()
+            : [nodes.getById(msg.nodeId)?.socket].filter((target) => target !== undefined)
+        if (msg.nodeId !== 'all' && !targets.length) {
+          sendError(socket, {
+            code: 'node-offline',
+            message: 'Action server is offline',
+          })
+          return
+        }
+        for (const target of targets) if (target.readyState === 1) target.send(JSON.stringify(msg))
+        return
+      }
+      if (msg.type === 'list-options' || msg.type === 'test-plugin') {
+        if (client.role !== 'editor') {
+          sendError(socket, { code: 'forbidden', message: 'Editor required' }, msg.requestId)
+          return
+        }
+        router.forward(msg, socket)
         return
       }
 
@@ -265,7 +452,7 @@ export function startGateway(port: number, options: GatewayOptions) {
           console.warn('Received macro trigger for unknown macro ID', msg.macroId)
           return
         }
-        router.trigger(macro)
+        router.trigger(macro, msg.requestId, socket, msg.value)
         return
       }
 
@@ -294,20 +481,35 @@ export function startGateway(port: number, options: GatewayOptions) {
       }
 
       if (COMMAND_TYPES.has(msg.type)) {
+        if (
+          (msg.type === 'update-plugin' || msg.type === 'delete-plugin') &&
+          (!fromLoopback || client.role !== 'editor')
+        ) {
+          sendError(socket, {
+            code: 'forbidden',
+            message: 'Local editor required',
+          })
+          return
+        }
         const result = store.applyCommand(msg)
         if (isProtocolError(result)) {
           console.warn('Command rejected:', result.message)
           sendError(socket, result)
           return
         }
+        if (msg.type === 'delete-plugin') plugins.delete(msg.pluginId)
         stateFile.save(store.getState())
         broadcast(result)
+        if (msg.type === 'delete-plugin' || msg.type === 'update-plugin') syncAll()
         // The edit may have bound, unbound or moved a stateful macro on a viewed screen.
         actionState.recompute()
       }
     })
 
     socket.on('close', () => {
+      router.disconnect(socket)
+      nodePlugins.delete(socket)
+      syncProgress.delete(socket)
       nodes.remove(socket)
       clients.delete(socket)
       if (client.role === 'controller' && client.viewedScreenId) actionState.recompute()

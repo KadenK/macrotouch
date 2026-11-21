@@ -45,7 +45,7 @@ export function createActionServerLauncher({ masterUrl }: { masterUrl: string })
     const args = entry.endsWith('.ts') ? ['--import', 'tsx', entry] : [entry]
     const startedAt = Date.now()
     const processChild = spawn(process.execPath, args, {
-      env: { ...process.env, MACROTOUCH_MASTER_URL: masterUrl },
+      env: { ...process.env, MACROTOUCH_MASTER_URL: masterUrl, MACROTOUCH_LOCAL_NODE: '1' },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     })
     child = processChild

@@ -24,6 +24,7 @@ export function emptyState(): MacroState {
 export class StateFile {
   readonly dataRoot: string
   readonly filePath: string
+  private writes = Promise.resolve()
 
   constructor(dataRoot = resolveDataRoot()) {
     this.dataRoot = dataRoot
@@ -44,6 +45,22 @@ export class StateFile {
     try {
       const data = fs.readFileSync(this.filePath, 'utf-8')
       const parsed = JSON.parse(data) as MacroState
+      const ids: Record<string, string> = {
+        keyCombo: 'core-keyboard/keyCombo',
+        typeText: 'core-keyboard/typeText',
+        launchApp: 'core-system/launchApp',
+        shellCommand: 'core-system/shellCommand',
+        sendNotification: 'core-system/sendNotification',
+        multimediaControl: 'core-media/multimediaControl',
+      }
+      let migrated = false
+      for (const macro of Object.values(parsed.macros ?? {})) {
+        if (macro.actionId && Object.hasOwn(ids, macro.actionId)) {
+          macro.actionId = ids[macro.actionId]
+          migrated = true
+        }
+      }
+      if (migrated) this.save(parsed)
       console.log('Loaded state from file')
       return parsed
     } catch (err) {
@@ -64,8 +81,10 @@ export class StateFile {
       return
     }
 
-    fs.writeFile(this.filePath, data, 'utf-8', (err) => {
-      if (err) console.error('Failed to save state:', err)
-    })
+    this.writes = this.writes
+      .then(() => fs.promises.writeFile(this.filePath, data, 'utf-8'))
+      .catch((err) => {
+        console.error('Failed to save state:', err)
+      })
   }
 }

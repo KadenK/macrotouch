@@ -232,18 +232,58 @@ function showWindow(route) {
   mainWindow.focus()
 }
 
+// Main window size on first launch, before there is a saved one.
+const DEFAULT_WINDOW_SIZE = { width: 1280, height: 860 }
+const MIN_WINDOW_SIZE = { width: 800, height: 600 }
+const windowStatePath = () => path.join(app.getPath('userData'), 'window-state.json')
+
+/** The last saved main window bounds, or the default size centred on the primary display. */
+function loadWindowState() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(windowStatePath(), 'utf8'))
+    const width = Math.max(MIN_WINDOW_SIZE.width, Number(saved.width) || 0)
+    const height = Math.max(MIN_WINDOW_SIZE.height, Number(saved.height) || 0)
+    const state = { width, height, isMaximized: !!saved.isMaximized }
+    // Keep the position only if it still lands on a connected display.
+    if (Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+      const area = screen.getDisplayMatching({ x: saved.x, y: saved.y, width, height }).workArea
+      const visible =
+        saved.x < area.x + area.width && saved.x + width > area.x &&
+        saved.y < area.y + area.height && saved.y + height > area.y
+      if (visible) Object.assign(state, { x: saved.x, y: saved.y })
+    }
+    return state
+  } catch {
+    // No saved state yet; fit the default to the screen.
+    const { workArea } = screen.getPrimaryDisplay()
+    return {
+      width: Math.min(DEFAULT_WINDOW_SIZE.width, workArea.width),
+      height: Math.min(DEFAULT_WINDOW_SIZE.height, workArea.height),
+      isMaximized: false,
+    }
+  }
+}
+
+function saveWindowState(win) {
+  try {
+    // Normal bounds, so a maximized window restores to the size it had before.
+    const bounds = win.getNormalBounds()
+    fs.writeFileSync(windowStatePath(), JSON.stringify({ ...bounds, isMaximized: win.isMaximized() }, null, 2))
+  } catch (err) {
+    console.error('Failed to save window state:', err)
+  }
+}
+
 function createWindow(route = '/home', { show = true } = {}) {
-  // Calculate window size relative to screen size
-  const primaryDisplay = screen.getPrimaryDisplay()
-  const { width: screenWidth, height: screenHeight } = primaryDisplay.bounds
-  const windowWidth = Math.floor(screenWidth * 0.8) // 80% of screen width
-  const windowHeight = Math.floor(screenHeight * 0.8) // 80% of screen height
+  const windowState = loadWindowState()
 
   mainWindow = new BrowserWindow({
-    width: windowWidth,
-    height: windowHeight,
-    minWidth: 800,
-    minHeight: 600,
+    x: windowState.x,
+    y: windowState.y,
+    width: windowState.width,
+    height: windowState.height,
+    minWidth: MIN_WINDOW_SIZE.width,
+    minHeight: MIN_WINDOW_SIZE.height,
     icon: appIcon,
     show,
     webPreferences: {
@@ -257,6 +297,13 @@ function createWindow(route = '/home', { show = true } = {}) {
   if (mainWindow && mainWindow.setIcon) {
     mainWindow.setIcon(appIcon)
   }
+
+  // maximize() also shows the window, so a hidden (boot-to-tray) one waits to be shown.
+  if (windowState.isMaximized) {
+    if (show) mainWindow.maximize()
+    else mainWindow.once('show', () => mainWindow.maximize())
+  }
+  mainWindow.on('close', () => saveWindowState(mainWindow))
 
   const isDev = isDevelopmentMode()
   console.log('Electron startup mode:', { isDev, NODE_ENV: process.env.NODE_ENV, isPackaged: app.isPackaged })

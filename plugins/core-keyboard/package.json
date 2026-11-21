@@ -1,0 +1,60 @@
+{
+  "name": "@macrotouch/plugin-core-keyboard",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "macrotouch": {
+    "id": "core-keyboard",
+    "label": "Keyboard",
+    "icon": "ic:baseline-keyboard",
+    "apiVersion": 1,
+    "checks": {
+      "linux-input": {
+        "anyOf": [
+          {
+            "type": "command",
+            "name": {
+              "linux": "xdotool"
+            }
+          },
+          {
+            "type": "command",
+            "name": {
+              "linux": "ydotool"
+            }
+          }
+        ],
+        "message": "Neither xdotool nor ydotool is installed",
+        "hint": "Install xdotool (X11) or ydotool (Wayland)"
+      },
+      "mac-input": {
+        "type": "command",
+        "name": {
+          "darwin": "osascript"
+        }
+      },
+      "windows-input": {
+        "type": "command",
+        "name": {
+          "win32": "powershell"
+        }
+      }
+    },
+    "actions": {
+      "keyCombo": {
+        "requires": [
+          "linux-input",
+          "mac-input",
+          "windows-input"
+        ]
+      },
+      "typeText": {
+        "requires": [
+          "linux-input",
+          "mac-input",
+          "windows-input"
+        ]
+      }
+    }
+  }
+}

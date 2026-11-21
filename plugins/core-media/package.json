@@ -1,0 +1,58 @@
+{
+  "name": "@macrotouch/plugin-core-media",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "macrotouch": {
+    "id": "core-media",
+    "label": "Media",
+    "icon": "ic:baseline-play-circle",
+    "apiVersion": 1,
+    "checks": {
+      "linux-media": {
+        "anyOf": [
+          {
+            "type": "command",
+            "name": {
+              "linux": "wpctl"
+            }
+          },
+          {
+            "type": "command",
+            "name": {
+              "linux": "pactl"
+            }
+          },
+          {
+            "type": "command",
+            "name": {
+              "linux": "amixer"
+            }
+          },
+          {
+            "type": "command",
+            "name": {
+              "linux": "playerctl"
+            }
+          }
+        ],
+        "message": "No supported media command is installed",
+        "hint": "Install wpctl, pactl, amixer, or playerctl"
+      },
+      "mac-media": {
+        "type": "command",
+        "name": {
+          "darwin": "osascript"
+        }
+      }
+    },
+    "actions": {
+      "multimediaControl": {
+        "requires": [
+          "linux-media",
+          "mac-media"
+        ]
+      }
+    }
+  }
+}

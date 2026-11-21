@@ -7,6 +7,17 @@ export type ProtocolErrorCode =
   | 'unknown-screen'
   | 'unknown-action'
   | 'action-failed'
+  /** The action's plugin does not support this node's OS. */
+  | 'unsupported-platform'
+  /** The action cannot run on this node now: a missing app or tool, not ready, or not configured. `details` carries its `Availability`. */
+  | 'action-unavailable'
+  /** The plugin threw or timed out. */
+  | 'plugin-error'
+  /** Only the local editor may do this (install, remove, configure plugins). */
+  | 'forbidden'
+  /** A plugin package failed validation. `message` says why. */
+  | 'invalid-plugin'
+  | 'unknown-plugin'
 
 export interface ProtocolError {
   code: ProtocolErrorCode

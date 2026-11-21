@@ -1,5 +1,3 @@
-import type { ActionStateValue } from './actionState'
-
 export enum ActionType {
   Filepath = 'filepath',
   String = 'string',
@@ -13,10 +11,15 @@ export interface ActionField {
   label: string
   type: ActionType
   options?: string[]
+  /**
+   * The plugin lists the options at runtime (Home Assistant entities, Discord
+   * channels). The editor asks with `list-options`; `options` is then only a fallback.
+   */
+  dynamicOptions?: boolean
 }
 
 /**
- * The shape of a live reading, which decides the widget a controller draws.
+ * The shape of a live reading, which decides the standard face a macro is drawn with.
  *
  * - `toggle`: a boolean, drawn as a button whose look follows the value.
  * - `range`: a number from 0 to 1, drawn as a slider.
@@ -24,7 +27,7 @@ export interface ActionField {
  */
 export type ActionStateKind = 'toggle' | 'range' | 'text'
 
-/** The part of {@link ActionStateSpec} that is data, so it can travel in a catalog. */
+/** What an action can report live, as data so it can travel in a catalog. */
 export interface ActionStateInfo {
   kind: ActionStateKind
   /**
@@ -36,25 +39,6 @@ export interface ActionStateInfo {
   valueLabels?: Record<string, string>
   /** Icons a new macro starts with for each value, e.g. `{ true: 'ic:baseline-volume-off' }`. */
   defaultIcons?: Record<string, string>
-}
-
-/** Present on an action that can report what the computer is currently doing. */
-export interface ActionStateSpec extends ActionStateInfo {
-  /** Read the current value. `null` means it could not be read. */
-  get(parameters: Record<string, unknown> | undefined): ActionStateValue | Promise<ActionStateValue>
-}
-
-export interface Action {
-  actionId: string
-  label: string
-  actionFields: ActionField[]
-  execute(parameters: Record<string, unknown> | undefined): unknown | Promise<unknown>
-  /**
-   * What this action can report live, per parameter choice. The first entry
-   * whose `when` matches the macro's parameters applies; none matching means
-   * the macro is not stateful.
-   */
-  states?: ActionStateSpec[]
 }
 
 /** The state that applies to an action run with `parameters`, if any. */

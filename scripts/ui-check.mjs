@@ -157,12 +157,18 @@ const cells = () => win.locator('.grid-item')
 const title = () => win.locator('.modal-title').innerText()
 const screenNames = async () => win.locator('select.screen-select option').allInnerTexts()
 
+/** Picks an action in the macro editor's ActionPicker (a combobox, not a native select). */
+async function pickAction(label) {
+  await win.locator('.edit-form [aria-haspopup=listbox]').first().click()
+  await win.locator('[role=option]', { hasText: label }).first().click()
+}
+
 async function makeMacro(cellIndex, name, actionLabel, params) {
   await cells().nth(cellIndex).locator('button.macro.edit').click()
   await win.waitForSelector('.modal-container')
   await win.locator('.edit-form input[type=text]').first().fill(name)
   if (actionLabel) {
-    await win.locator('.edit-form select').first().selectOption({ label: actionLabel })
+    await pickAction(actionLabel)
     await win.waitForTimeout(200)
     if (params)
       for (const [i, v] of params.entries())
@@ -331,12 +337,11 @@ await check('MC-04', 'the icon picker opens, searches, and updates the preview',
 await check('MC-06', 'switching the action type replaces the parameter fields', async () => {
   await cells().nth(2).locator('button.macro.edit').click()
   await win.waitForSelector('.modal-container')
-  const select = win.locator('.edit-form select').first()
-  await select.selectOption({ label: 'Shell Command' })
+  await pickAction('Shell Command')
   await win.waitForTimeout(300)
   const shellFields = await win.locator('.edit-form label').allInnerTexts()
   assert(shellFields.includes('Command'), `Shell Command fields were ${JSON.stringify(shellFields)}`)
-  await select.selectOption({ label: 'Send Notification' })
+  await pickAction('Send Notification')
   await win.waitForTimeout(300)
   const notifyFields = await win.locator('.edit-form label').allInnerTexts()
   assert(!notifyFields.includes('Command'), 'the Command field survived a change of action type')

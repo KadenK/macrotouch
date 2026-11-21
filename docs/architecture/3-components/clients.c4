@@ -36,6 +36,16 @@ model {
       technology 'pages/editor/pair.vue'
     }
 
+    pluginsPage = ui 'PluginsPage' {
+      description 'Page for installing, enabling, configuring, and re-checking plugins, showing where each one can run'
+      technology 'pages/plugins.vue'
+    }
+
+    faces = module 'MacroFaces' {
+      description 'Finds the face that draws a macro and the face settings it depends on: a standard face, or one a plugin provides'
+      technology 'composables/useMacroFace.ts'
+    }
+
     devices = ui 'DevicesPage' {
       description 'Page that lists paired devices to rename, set a default screen, or revoke, and mints enrollment tokens for action servers'
       technology 'pages/editor/devices.vue'
@@ -51,6 +61,11 @@ model {
     devices -[call]-> ws 'send(update-device, revoke-device, create-enrollment-token)'
     screens -[call]-> store 'read, moveMacro()'
     macroEditor -[call]-> store 'read, upsertMacro()'
+    macroEditor -[call]-> faces 'useMacroFace(face, stateKind), faceSettingsFor(face)'
+    macroEditor -[call]-> ws 'send(list-options)'
+    screens -[call]-> faces 'display(macro)'
+    pluginsPage -[call]-> store 'read plugins and catalogs, updatePlugin()'
+    pluginsPage -[call]-> ws 'send(install-plugin, plugin-secrets, test-plugin)'
     settings -[call]-> store 'read, updateSettings()'
   }
 
@@ -70,6 +85,11 @@ model {
       technology 'pages/index.vue'
     }
 
+    faces = module 'MacroFaces' {
+      description 'Finds the face that draws a macro and the face settings it depends on: a standard face, or one a plugin provides'
+      technology 'composables/useMacroFace.ts'
+    }
+
     grid = ui 'ScreenGrid' {
       description 'Shows the current screen; swipe to change screens'
       technology 'pages/remote.vue'
@@ -87,9 +107,10 @@ model {
     grid -[call]-> store 'read screens, setScreen()'
     grid -[call]-> cell 'renders'
     cell -[call]-> store 'read state, trigger()'
+    cell -[call]-> faces 'display(macro)'
   }
 
-  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch, claim, pair-decision, resume-pairing, devices, update-device, revoke-device, create-enrollment-token' {
+  macrotouch.editor.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, commands, state-patch, catalogs, list-options, action-result, plugin-secrets, claim, pair-decision, resume-pairing, devices, update-device, revoke-device, create-enrollment-token' {
     technology 'WebSocket'
   }
   macrotouch.controller.ws -[message]<-> macrotouch.master.gateway 'hello, snapshot, pair-request, pair-answer, view-screen, macro-trigger, state-patch, action-state' {
@@ -99,6 +120,12 @@ model {
     technology 'IPC (preload)'
   }
   macrotouch.editor.pair -[message]-> macrotouch.master.http 'GET /api/ip' {
+    technology 'HTTP'
+  }
+  macrotouch.editor.faces -[message]-> macrotouch.master.http 'GET plugin face code' {
+    technology 'HTTP'
+  }
+  macrotouch.controller.faces -[message]-> macrotouch.master.http 'GET plugin face code' {
     technology 'HTTP'
   }
 }

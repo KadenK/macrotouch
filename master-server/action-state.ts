@@ -46,9 +46,9 @@ export class ActionStateHub {
         for (const macroId of row.macrosIds) {
           const macro = macroId ? macros[macroId] : undefined
           if (!macro?.actionId) continue
-          const socket = this.nodes.findStateful(macro.actionId, macro.parameters)
+          const socket = this.nodes.findStateful(macro.actionId, macro.parameters, macro.nodeId)
           if (!socket) continue
-          const key = actionStateKey(macro.actionId, macro.parameters)
+          const key = actionStateKey(macro.actionId, macro.parameters, macro.nodeId)
           let list = wanted.get(socket)
           if (!list) wanted.set(socket, (list = new Map()))
           list.set(key, {

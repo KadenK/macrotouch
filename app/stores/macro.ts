@@ -2,10 +2,14 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type {
   ActionCatalog,
-  ActionDescriptor,
+  ActionGroup,
   ActionStateEntry,
   ActionStateKey,
   ActionStateValue,
+  ActionOption,
+  InstalledPlugin,
+  NodeInfo,
+  PluginFiles,
   Color,
   Macro,
   MacroScreen,
@@ -16,10 +20,10 @@ import type {
   ScreenListItem,
   ScreenRow,
 } from '~/../shared/types'
-import type { ClientToMasterMessage, StatePatch } from '~/../shared/protocol'
+import type { ActionResult, ClientToMasterMessage, PluginTestResult, StatePatch } from '~/../shared/protocol'
 import { uuid } from '~/../shared/uuid'
 import { applyAssignments, fits, isUnitSpan, planMove, resolveLayout } from '~/../shared/layout'
-import { actionStateKey, createMacroScreen, createColor, createDefaultSettings } from '~/../shared/types'
+import { actionStateKey, createMacroScreen, createColor, createDefaultSettings, nodeLabel } from '~/../shared/types'
 
 const DEFAULT_SETTINGS: MacroSettings = createDefaultSettings()
 
@@ -33,18 +37,34 @@ export const useMacroStore = defineStore('Macro', () => {
 
   const isApplyingRemoteState = ref(false)
   const isReady = ref(false)
+  const actionError = ref<{ message: string } | null>(null)
+
+  function reportActionError(message: string) {
+    actionError.value = { message }
+  }
 
   /** One catalog per connected action server, from the master. */
   const catalogs = ref<Record<string, ActionCatalog>>({})
+  const nodes = ref<NodeInfo[]>([])
+  const plugins = ref<Record<string, InstalledPlugin>>({})
+  const localNode = computed(() => nodes.value.find((node) => node.local))
 
-  // Macros have no node yet, so the first node's actions are the ones offered.
-  const actions = computed<ActionDescriptor[]>(() => {
-    const catalog = Object.values(catalogs.value)[0]
-    return catalog ? catalog.groups.flatMap((group) => group.actions) : []
-  })
+  /** The groups (one per plugin) this computer's action server offers. */
+  const actionGroups = computed<ActionGroup[]>(
+    () => (localNode.value && catalogs.value[localNode.value.nodeId]?.groups) || [],
+  )
+  /** `"<computer>: "` to start a per-computer message with, or nothing when there is only one computer. */
+  function nodePrefix(node: NodeInfo): string {
+    return nodes.value.length > 1 ? `${nodeLabel(node)}: ` : ''
+  }
+  /** One plugin's group as a given action server reports it, if it runs there. */
+  function pluginGroup(nodeId: string, pluginId: string): ActionGroup | undefined {
+    return catalogs.value[nodeId]?.groups.find((group) => group.id === pluginId)
+  }
 
-  function applyCatalogs(updated: Record<string, ActionCatalog>) {
+  function applyCatalogs(updated: Record<string, ActionCatalog>, updatedNodes: NodeInfo[]) {
     catalogs.value = updated
+    nodes.value = updatedNodes
   }
 
   /** Latest live readings of stateful actions, from the master. Controllers only. */
@@ -57,7 +77,7 @@ export const useMacroStore = defineStore('Macro', () => {
   /** The live reading for a macro's action, if it has one. */
   function getActionState(macro: Macro): ActionStateEntry | undefined {
     if (!macro.actionId) return undefined
-    return actionStates.value[actionStateKey(macro.actionId, macro.parameters)]
+    return actionStates.value[actionStateKey(macro.actionId, macro.parameters, macro.nodeId)]
   }
 
   /**
@@ -85,14 +105,76 @@ export const useMacroStore = defineStore('Macro', () => {
     sendFn.value?.(message)
   }
 
+  const pending = new Map<
+    string,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >()
+
+  function request(message: ClientToMasterMessage & { requestId: string }): Promise<unknown> {
+    if (!isReady.value || !sendFn.value) return Promise.reject(new Error('Not connected'))
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(message.requestId)
+        reject(new Error('Request timed out'))
+      }, 30000)
+      pending.set(message.requestId, { resolve, reject, timer })
+      sendFn.value!(message)
+    })
+  }
+
+  function applyActionResult(result: ActionResult): boolean {
+    const entry = pending.get(result.requestId)
+    if (!entry) return false
+    pending.delete(result.requestId)
+    clearTimeout(entry.timer)
+    if (result.ok) entry.resolve(result.value)
+    else entry.reject(new Error(result.error.message))
+    return true
+  }
+
+  function installPlugin(files: PluginFiles) {
+    return request({ type: 'install-plugin', requestId: uuid(), files })
+  }
+  function updatePlugin(pluginId: string, patch: { enabled?: boolean; settings?: Record<string, unknown> }) {
+    send({ type: 'update-plugin', pluginId, ...patch })
+  }
+  function deletePlugin(pluginId: string) {
+    send({ type: 'delete-plugin', pluginId })
+  }
+  function setPluginSecrets(pluginId: string, nodeId: string, values: Record<string, string | null>) {
+    send({ type: 'plugin-secrets', pluginId, nodeId, values })
+  }
+  /** Run a plugin's connection test on one action server. */
+  async function testPlugin(nodeId: string, pluginId: string): Promise<PluginTestResult> {
+    return (await request({ type: 'test-plugin', requestId: uuid(), nodeId, pluginId })) as PluginTestResult
+  }
+  async function listOptions(
+    nodeId: string | undefined,
+    actionId: string,
+    field: string,
+    parameters: Record<string, unknown>,
+  ): Promise<ActionOption[]> {
+    return (await request({
+      type: 'list-options',
+      requestId: uuid(),
+      nodeId,
+      actionId,
+      field,
+      parameters,
+    })) as ActionOption[]
+  }
+
   function applySnapshot(
     state: MacroState,
     snapshotCatalogs?: Record<string, ActionCatalog>,
     snapshotActionState?: Record<ActionStateKey, ActionStateEntry>,
+    snapshotNodes?: NodeInfo[],
   ) {
     isApplyingRemoteState.value = true
 
     catalogs.value = snapshotCatalogs ?? {}
+    nodes.value = snapshotNodes ?? []
+    plugins.value = state.plugins ?? {}
     actionStates.value = snapshotActionState ? { ...snapshotActionState } : {}
 
     macros.value = state.macros || {}
@@ -180,6 +262,15 @@ export const useMacroStore = defineStore('Macro', () => {
       }
     }
 
+    if (patch.plugins) {
+      for (const [id, plugin] of Object.entries(patch.plugins)) {
+        if (plugin === null) {
+          const { [id]: _removed, ...rest } = plugins.value
+          plugins.value = rest
+        } else plugins.value[id] = plugin
+      }
+    }
+
     if (patch.settings) {
       settings.value = { ...settings.value, ...patch.settings }
     }
@@ -204,7 +295,7 @@ export const useMacroStore = defineStore('Macro', () => {
     send({ type: 'upsert-macro', macro: macros.value[macroId]! })
   }
 
-  /** Run a macro. `value` is for continuous controls such as a slider. */
+  /** Run a macro. `value` is for faces that set one, such as a plugin's dial. */
   function triggerMacro(macroId: string, value?: ActionStateValue) {
     if (!macros.value[macroId]) {
       console.warn(`Macro with id ${macroId} does not exist`)
@@ -379,7 +470,22 @@ export const useMacroStore = defineStore('Macro', () => {
     macros,
     screens,
     settings,
-    actions,
+    actionGroups,
+    pluginGroup,
+    nodePrefix,
+    catalogs,
+    nodes,
+    localNode,
+    plugins,
+    installPlugin,
+    updatePlugin,
+    deletePlugin,
+    setPluginSecrets,
+    listOptions,
+    testPlugin,
+    applyActionResult,
+    actionError,
+    reportActionError,
     actionStates,
     isReady,
     getActionState,

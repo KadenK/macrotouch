@@ -30,7 +30,12 @@ const isSpan = (v: unknown): boolean =>
   isObj(v) && Number.isInteger(v.rows) && Number.isInteger(v.columns) && Number(v.rows) >= 1 && Number(v.columns) >= 1
 
 /** A macro/screen is checked for the fields the store actually dereferences. */
-const isMacro = (v: unknown): boolean => isObj(v) && isStr(v.id)
+const isMacro = (v: unknown): boolean =>
+  isObj(v) &&
+  isStr(v.id) &&
+  (v.nodeId === undefined || isStr(v.nodeId)) &&
+  (v.face === undefined || isStr(v.face)) &&
+  (v.faceSettings === undefined || isObj(v.faceSettings))
 const isScreen = (v: unknown): boolean =>
   isObj(v) &&
   isStr(v.id) &&
@@ -39,8 +44,41 @@ const isScreen = (v: unknown): boolean =>
   typeof (v.size as Record<string, unknown>).columns === 'number' &&
   Array.isArray(v.macroRows)
 
+const isAvailability = (v: unknown): boolean =>
+  isObj(v) &&
+  ['available', 'not-ready', 'not-configured', 'unsupported-platform', 'missing-dependency', 'plugin-error'].includes(
+    String(v.status),
+  ) &&
+  (v.message === undefined || isStr(v.message)) &&
+  (v.hint === undefined || isStr(v.hint))
+
+const isCatalogGroup = (v: unknown): boolean =>
+  isObj(v) &&
+  isStr(v.id) &&
+  isStr(v.label) &&
+  (v.version === undefined || isStr(v.version)) &&
+  (v.availability === undefined || isAvailability(v.availability)) &&
+  Array.isArray(v.actions) &&
+  v.actions.every(
+    (action: unknown) =>
+      isObj(action) &&
+      isStr(action.actionId) &&
+      (action.availability === undefined || isAvailability(action.availability)),
+  )
+
 function validateCommand(m: Record<string, unknown>): StateCommand | ProtocolError {
   switch (m.type) {
+    case 'update-plugin':
+      if (
+        !isStr(m.pluginId) ||
+        (m.enabled !== undefined && typeof m.enabled !== 'boolean') ||
+        (m.settings !== undefined && !isObj(m.settings))
+      )
+        return fail('Invalid update-plugin')
+      return m as unknown as StateCommand
+    case 'delete-plugin':
+      if (!isStr(m.pluginId)) return fail('Invalid delete-plugin')
+      return m as unknown as StateCommand
     case 'upsert-macro':
       if (!isMacro(m.macro)) return fail('upsert-macro requires a macro with an id')
       if (m.placement !== undefined) {
@@ -102,11 +140,16 @@ export function parseClientMessage(
       }
       if (role === 'node') {
         if (
+          (parsed.local !== undefined && typeof parsed.local !== 'boolean') ||
+          (parsed.plugins !== undefined &&
+            (!Array.isArray(parsed.plugins) ||
+              !parsed.plugins.every((p: unknown) => isObj(p) && isStr(p.id) && isStr(p.sha256)))) ||
           !isStr(parsed.nodeId) ||
           !isStr(parsed.label) ||
           !isStr(parsed.platform) ||
           !isObj(parsed.catalog) ||
-          !Array.isArray(parsed.catalog.groups)
+          !Array.isArray(parsed.catalog.groups) ||
+          !parsed.catalog.groups.every(isCatalogGroup)
         ) {
           return fail('node hello requires nodeId, label, platform and catalog.groups')
         }
@@ -117,6 +160,32 @@ export function parseClientMessage(
       }
       return parsed as unknown as ClientToMasterMessage
     }
+    case 'install-plugin':
+      if (!isStr(parsed.requestId) || !isObj(parsed.files)) return fail('Invalid install-plugin')
+      return parsed as unknown as ClientToMasterMessage
+    case 'plugin-secrets':
+      if (
+        !isStr(parsed.pluginId) ||
+        !isStr(parsed.nodeId) ||
+        !isObj(parsed.values) ||
+        !Object.values(parsed.values).every((v) => v === null || isStr(v))
+      )
+        return fail('Invalid plugin-secrets')
+      return parsed as unknown as ClientToMasterMessage
+    case 'list-options':
+      if (
+        !isStr(parsed.requestId) ||
+        !isStr(parsed.actionId) ||
+        !isStr(parsed.field) ||
+        (parsed.nodeId !== undefined && !isStr(parsed.nodeId)) ||
+        (parsed.parameters !== undefined && !isObj(parsed.parameters))
+      )
+        return fail('Invalid list-options')
+      return parsed as unknown as ClientToMasterMessage
+    case 'test-plugin':
+      if (!isStr(parsed.requestId) || !isStr(parsed.pluginId) || (parsed.nodeId !== undefined && !isStr(parsed.nodeId)))
+        return fail('Invalid test-plugin')
+      return parsed as unknown as ClientToMasterMessage
     case 'quit':
       return parsed as unknown as DesktopToMasterMessage
     case 'regenerate-token':
@@ -136,6 +205,12 @@ export function parseClientMessage(
     case 'macro-trigger':
       if (!isStr(parsed.requestId)) return fail('macro-trigger requires requestId')
       if (!isStr(parsed.macroId)) return fail('macro-trigger requires macroId')
+      if (
+        parsed.value !== undefined &&
+        parsed.value !== null &&
+        !['boolean', 'number', 'string'].includes(typeof parsed.value)
+      )
+        return fail('macro-trigger value must be a boolean, number, string or null')
       return parsed as unknown as ClientToMasterMessage
     case 'view-screen':
       if (parsed.screenId !== null && !isStr(parsed.screenId)) {

@@ -36,11 +36,17 @@ export type ActionStateKey = string
  * Parameter order is ignored, and no parameters equals an empty object, so two
  * macros bound to the same action share one reading.
  */
-export function actionStateKey(actionId: string, parameters?: Record<string, unknown>): ActionStateKey {
+export function actionStateKey(
+  actionId: string,
+  parameters?: Record<string, unknown>,
+  /** `Macro.nodeId`. Absent (the local node) keeps the key unchanged, so the same action on two nodes is two readings. */
+  nodeId?: string,
+): ActionStateKey {
   const entries = Object.entries(parameters ?? {})
     .filter(([, value]) => value !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-  return entries.length ? `${actionId}:${JSON.stringify(entries)}` : actionId
+  const key = entries.length ? `${actionId}:${JSON.stringify(entries)}` : actionId
+  return nodeId ? `${nodeId}@${key}` : key
 }
 
 /** One action the master has asked a node to report on. */

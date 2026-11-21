@@ -1,6 +1,7 @@
 import type { Color } from './common'
 import type { Macro } from './macro'
 import type { MacroScreen } from './screen'
+import type { InstalledPlugin } from './plugin'
 
 export interface MacroSettings {
   defaultScreenBgColor: Color
@@ -35,4 +36,6 @@ export interface MacroState {
   macros: Record<string, Macro>
   screens: Record<string, MacroScreen>
   settings?: MacroSettings
+  /** Installed (non-built-in) plugins, by id. The master is the source of truth. */
+  plugins?: Record<string, InstalledPlugin>
 }

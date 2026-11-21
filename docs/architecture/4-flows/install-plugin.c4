@@ -1,0 +1,40 @@
+// Flow: install a plugin from the editor and spread it to every action server
+views "4. Flows" {
+  dynamic view flow-install-plugin {
+    variant sequence
+    title 'Install a Plugin'
+
+    user -> macrotouch.editor.pluginsPage 'chooses a plugin package'
+    macrotouch.editor.pluginsPage -> macrotouch.editor.ws 'send(install-plugin)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'install-plugin: files'
+    macrotouch.master.gateway -> macrotouch.master.pluginRegistry 'install(files)'
+    macrotouch.master.pluginRegistry -> macrotouch.plugins 'save package'
+    macrotouch.master.pluginRegistry -> macrotouch.master.store 'apply(update-plugin)'
+    macrotouch.master.store -> macrotouch.master.gateway 'change'
+    macrotouch.editor.ws <- macrotouch.master.gateway 'state-patch: plugins, action-result'
+
+    loop 'each connected action server' {
+      macrotouch.master.pluginRegistry -> macrotouch.master.gateway 'send(nodeId, plugin-sync)'
+      macrotouch.master.gateway -> macrotouch.action.masterLink 'plugin-sync: plugins, files, settings'
+      macrotouch.action.masterLink -> macrotouch.action.pluginHost 'sync()'
+      macrotouch.action.pluginHost -> macrotouch.pluginCopies 'write, import()'
+      macrotouch.action.pluginHost -> macrotouch.action.checks 'requires(plugin)'
+      macrotouch.action.checks -> os 'look for Steam'
+      opt 'compatible' {
+        macrotouch.action.pluginHost -> macrotouch.action.pluginSettings 'get(pluginId)'
+        macrotouch.action.pluginHost -> macrotouch.action.actions 'activate(ctx)'
+      }
+      macrotouch.action.pluginHost -> macrotouch.action.masterLink 'catalog changed'
+      macrotouch.action.masterLink -> macrotouch.master.gateway 'hello: catalog with availability'
+      macrotouch.master.gateway -> macrotouch.master.actionServers 'register()'
+      macrotouch.editor.ws <- macrotouch.master.gateway 'catalogs'
+    }
+
+    user -> macrotouch.editor.pluginsPage 'enters token'
+    macrotouch.editor.pluginsPage -> macrotouch.editor.ws 'send(plugin-secrets)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'plugin-secrets'
+    macrotouch.master.gateway -> macrotouch.action.masterLink 'plugin-secrets (relayed, not stored)'
+    macrotouch.action.masterLink -> macrotouch.action.pluginSettings 'setSecrets()'
+    macrotouch.action.pluginSettings -> macrotouch.pluginSecrets 'write'
+  }
+}

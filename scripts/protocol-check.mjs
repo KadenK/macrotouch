@@ -25,10 +25,13 @@ import { WebSocket } from 'ws'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import net from 'node:net'
+import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 const WS_URL = process.env.WS_URL ?? 'ws://127.0.0.1:4322'
 const HTTP_URL = process.env.HTTP_URL ?? 'http://127.0.0.1:4321'
-const PROTOCOL_VERSION = 1
+const PROTOCOL_VERSION = 2
 const TIMEOUT = 2000
 
 /**
@@ -320,7 +323,7 @@ async function main() {
     await c.waitClose()
   })
 
-  await check('a loopback node hello is accepted without a reply', async () => {
+  await check('a loopback node hello receives plugin sync', async () => {
     const c = await connect()
     c.send({
       type: 'hello',
@@ -331,9 +334,213 @@ async function main() {
       platform: 'linux',
       catalog: { groups: [] },
     })
-    const seen = await c.quiet()
-    assert(seen.length === 0, `expected no reply to a node hello, got ${JSON.stringify(seen)}`)
+    const sync = await c.next((m) => m.type === 'plugin-sync')
+    assert(Array.isArray(sync.plugins), 'missing desired plugin set')
     assert(!c.closed, 'the node connection was closed')
+  })
+
+  section('Plugin distribution')
+  await check('install, sync, serve, update, reject secrets, and delete', async () => {
+    const { c: editor } = await connected()
+    const node = await connect()
+    node.send({
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId: uid('plugin-node'),
+      label: 'Plugin node',
+      platform: 'linux',
+      catalog: { groups: [] },
+      plugins: [],
+    })
+    await node.next((m) => m.type === 'plugin-sync')
+    const id = uid('test-plugin')
+    const encode = (value) => Buffer.from(value).toString('base64')
+    const files = {
+      'package.json': encode(
+        JSON.stringify({
+          name: id,
+          version: '1.0.0',
+          macrotouch: {
+            id,
+            label: 'Test',
+            apiVersion: 1,
+            ui: 'ui.mjs',
+            settings: [{ key: 'token', label: 'Token', type: 'string', secret: true }],
+          },
+        }),
+      ),
+      'server.mjs': encode('export default {}'),
+      'ui.mjs': encode('export const test = true'),
+    }
+    const sha = createHash('sha256')
+      .update(
+        JSON.stringify(
+          Object.keys(files)
+            .sort()
+            .map((key) => [key, files[key]]),
+        ),
+      )
+      .digest('hex')
+    editor.send({ type: 'install-plugin', requestId: id, files })
+    const patch = await editor.next((m) => m.type === 'state-patch' && m.plugins?.[id])
+    const result = await editor.next((m) => m.type === 'action-result' && m.requestId === id)
+    assert(
+      result.ok && result.value.sha256 === sha && patch.plugins[id].sha256 === sha,
+      'install result or hash incorrect',
+    )
+    const sync = await node.next((m) => m.type === 'plugin-sync' && m.plugins.some((p) => p.id === id))
+    assert(sync.plugins.find((p) => p.id === id).files['ui.mjs'] === files['ui.mjs'], 'sync omitted files')
+    const response = await fetch(`${HTTP_URL}/plugins/${id}/${sha}/ui.mjs`)
+    assert(response.status === 200 && (await response.text()) === 'export const test = true', 'UI file not served')
+    assert(
+      response.headers.get('content-type').startsWith('text/javascript') &&
+        response.headers.get('cache-control') === 'public, max-age=31536000, immutable',
+      'wrong asset headers',
+    )
+    assert((await fetch(`${HTTP_URL}/plugins/${id}/${'0'.repeat(64)}/ui.mjs`)).status === 404, 'wrong sha served')
+    editor.send({ type: 'update-plugin', pluginId: id, settings: { host: 'example' } })
+    assert(
+      (await editor.next((m) => m.type === 'state-patch' && m.plugins?.[id]?.settings.host)).plugins[id].settings
+        .host === 'example',
+      'settings not patched',
+    )
+    editor.send({ type: 'update-plugin', pluginId: id, settings: { token: 'private' } })
+    assert((await editor.next(isError)).error.code === 'invalid-message', 'secret was accepted')
+    editor.send({ type: 'delete-plugin', pluginId: id })
+    await editor.next((m) => m.type === 'state-patch' && m.plugins?.[id] === null)
+    assert((await fetch(`${HTTP_URL}/plugins/${id}/${sha}/ui.mjs`)).status === 404, 'deleted plugin served')
+    node.close()
+  })
+  await check('invalid plugin paths and reserved ids are rejected', async () => {
+    const { c } = await connected()
+    const encode = (value) => Buffer.from(value).toString('base64')
+    for (const [id, extra] of [
+      ['test-bad', { '../x': '' }],
+      ['core-x', {}],
+    ]) {
+      const files = {
+        'package.json': encode(
+          JSON.stringify({ name: id, version: '1', macrotouch: { id, label: id, apiVersion: 1 } }),
+        ),
+        'server.mjs': '',
+        ...extra,
+      }
+      c.send({ type: 'install-plugin', requestId: id, files })
+      const result = await c.next((m) => m.type === 'action-result' && m.requestId === id)
+      assert(!result.ok && result.error.code === 'invalid-plugin', 'invalid plugin accepted')
+    }
+  })
+  await check('shared file validation rejects case collisions and reserved markers without a patch', async () => {
+    const { c } = await connected()
+    const encode = (value) => Buffer.from(value).toString('base64')
+    for (const extra of [{ 'a.js': '', 'A.js': '' }, { '.sha256': '' }]) {
+      const id = uid('invalid-files')
+      const files = {
+        'package.json': encode(
+          JSON.stringify({ name: id, version: '1', macrotouch: { id, label: id, apiVersion: 1 } }),
+        ),
+        'server.mjs': '',
+        ...extra,
+      }
+      c.send({ type: 'install-plugin', requestId: id, files })
+      const result = await c.next((m) => m.type === 'action-result' && m.requestId === id)
+      assert(!result.ok && result.error.code === 'invalid-plugin', 'invalid files accepted')
+      assert(
+        !(await c.quiet()).some((m) => m.type === 'state-patch' && m.plugins?.[id]),
+        'invalid install patched state',
+      )
+    }
+  })
+  await check('failed sync attempts are suppressed until the package changes', async () => {
+    const { c: editor } = await connected()
+    const node = await connect()
+    const hello = {
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId: uid('sync-node'),
+      label: 'Sync',
+      platform: 'linux',
+      catalog: { groups: [] },
+      plugins: [],
+    }
+    node.send(hello)
+    await node.next((m) => m.type === 'plugin-sync')
+    const id = uid('sync-plugin')
+    const encode = (v) => Buffer.from(v).toString('base64')
+    const files = {
+      'package.json': encode(JSON.stringify({ name: id, version: '1', macrotouch: { id, label: id, apiVersion: 1 } })),
+      'server.mjs': '',
+    }
+    editor.send({ type: 'install-plugin', requestId: id, files })
+    await editor.next((m) => m.type === 'action-result' && m.requestId === id)
+    assert(
+      (await node.next((m) => m.type === 'plugin-sync')).plugins.find((p) => p.id === id).files,
+      'first attempt missing',
+    )
+    node.send(hello)
+    assert((await node.next((m) => m.type === 'plugin-sync')).plugins.find((p) => p.id === id).files, 'retry missing')
+    node.send(hello)
+    assert(
+      !(await node.next((m) => m.type === 'plugin-sync')).plugins.find((p) => p.id === id).files,
+      'failed package resent',
+    )
+    files['server.mjs'] = encode('export default {}')
+    editor.send({ type: 'install-plugin', requestId: `${id}-update`, files })
+    await editor.next((m) => m.type === 'action-result' && m.requestId === `${id}-update`)
+    assert(
+      (await node.next((m) => m.type === 'plugin-sync')).plugins.find((p) => p.id === id).files,
+      'updated package suppressed',
+    )
+    editor.send({ type: 'delete-plugin', pluginId: id })
+    await editor.next((m) => m.type === 'state-patch' && m.plugins?.[id] === null)
+    node.close()
+  })
+  await check('controllers cannot install, send secrets or test plugins', async () => {
+    const { c } = await connected('controller')
+    c.send({ type: 'install-plugin', requestId: 'forbidden', files: {} })
+    assert(
+      (await c.next((m) => m.type === 'action-result' && m.requestId === 'forbidden')).error.code === 'forbidden',
+      'install was permitted',
+    )
+    c.send({ type: 'plugin-secrets', pluginId: 'x', nodeId: 'all', values: { token: 'private' } })
+    assert((await c.next(isError)).error.code === 'forbidden', 'secrets were permitted')
+    c.send({ type: 'test-plugin', requestId: 'forbidden-test', pluginId: 'x' })
+    assert(
+      (await c.next((m) => m.requestId === 'forbidden-test')).error.code === 'forbidden',
+      'plugin test was permitted',
+    )
+  })
+  await check('unknown node is offline for options and macro triggers', async () => {
+    const { c } = await connected()
+    c.send({
+      type: 'list-options',
+      requestId: 'offline-options',
+      nodeId: 'missing-node',
+      actionId: 'x/y',
+      field: 'field',
+    })
+    assert(
+      (await c.next((m) => m.type === 'action-result' && m.requestId === 'offline-options')).error.code ===
+        'node-offline',
+      'options did not report offline',
+    )
+    c.send({ type: 'test-plugin', requestId: 'offline-test', nodeId: 'missing-node', pluginId: 'x' })
+    assert(
+      (await c.next((m) => m.type === 'action-result' && m.requestId === 'offline-test')).error.code ===
+        'node-offline',
+      'plugin test did not report offline',
+    )
+    const macro = { ...makeMacro(), nodeId: 'missing-node', actionId: 'x/y' }
+    c.send({ type: 'upsert-macro', macro })
+    await c.next((m) => m.type === 'state-patch' && m.macros?.[macro.id])
+    c.send({ type: 'macro-trigger', requestId: 'offline-macro', macroId: macro.id })
+    assert(
+      (await c.next((m) => m.type === 'action-result' && m.requestId === 'offline-macro')).error.code ===
+        'node-offline',
+      'macro did not report offline',
+    )
   })
 
   /* -- commands and patches ----------------------------------------------- */
@@ -598,6 +805,191 @@ async function main() {
     await c.next(isPatch)
   })
 
+  /* -- isolated action routing --------------------------------------------- */
+  section('Isolated action routing')
+
+  await check('migration, routing errors, forwarding and catalog refresh', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-gateway-'))
+    const legacy = { ...makeMacro('Legacy', 'legacy'), actionId: 'keyCombo' }
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ macros: { legacy }, screens: {}, settings: {} }))
+    const port = await new Promise((resolve, reject) => {
+      const server = net.createServer()
+      server.on('error', reject)
+      server.listen(0, '127.0.0.1', () => {
+        const port = server.address().port
+        server.close(() => resolve(port))
+      })
+    })
+    const child = spawn('node_modules/.bin/tsx', ['master-server/protocol-fixture.ts'], {
+      env: { ...process.env, MACROTOUCH_DATA_DIR: dir, WS_PORT: String(port) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const url = `ws://127.0.0.1:${port}`
+    const local = []
+    try {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('isolated gateway did not start')), 5000)
+        child.stdout.on('data', (chunk) => {
+          if (chunk.toString().includes('WebSocket server started')) {
+            clearTimeout(timer)
+            resolve()
+          }
+        })
+        child.once('exit', () => {
+          clearTimeout(timer)
+          reject(new Error('isolated gateway exited'))
+        })
+      })
+      const editor = await open(url)
+      local.push(editor)
+      editor.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'editor' })
+      const snapshot = await editor.next((m) => m.type === 'snapshot')
+      assert(snapshot.state.macros.legacy.actionId === 'core-keyboard/keyCombo', 'legacy id was not migrated')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      assert(
+        JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf-8')).macros.legacy.actionId ===
+          'core-keyboard/keyCombo',
+        'migration was not persisted',
+      )
+      const controller = await open(url)
+      local.push(controller)
+      controller.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller' })
+      await controller.next((m) => m.type === 'snapshot')
+      controller.send({ type: 'macro-trigger', requestId: 'offline', macroId: 'legacy' })
+      const offline = await controller.next((m) => m.type === 'action-result')
+      assert(
+        offline.requestId === 'offline' && !offline.ok && offline.error.code === 'node-offline',
+        'offline result incorrect',
+      )
+
+      const node = await open(url)
+      local.push(node)
+      const hello = (availability) => ({
+        type: 'hello',
+        protocolVersion: PROTOCOL_VERSION,
+        role: 'node',
+        nodeId: 'fixture',
+        local: true,
+        label: 'Fixture',
+        platform: 'linux',
+        catalog: {
+          groups: [
+            {
+              id: 'core-keyboard',
+              label: 'Keyboard',
+              version: '1',
+              actions: [{ actionId: 'core-keyboard/keyCombo', label: 'Key', actionFields: [], availability }],
+            },
+          ],
+        },
+      })
+      node.send(hello('invalid'))
+      const invalid = await node.next((m) => m.type === 'error')
+      assert(invalid.error.code === 'invalid-message', 'malformed availability was accepted')
+      for (const [status, code] of [
+        ['unsupported-platform', 'unsupported-platform'],
+        ['missing-dependency', 'action-unavailable'],
+      ]) {
+        node.send(hello({ status, message: status }))
+        await editor.next(
+          (m) => m.type === 'catalogs' && m.catalogs.fixture?.groups[0].actions[0].availability.status === status,
+        )
+        controller.send({ type: 'macro-trigger', requestId: status, macroId: 'legacy' })
+        const result = await controller.next((m) => m.type === 'action-result' && m.requestId === status)
+        assert(
+          !result.ok && result.error.code === code && result.error.details.status === status,
+          `wrong ${status} result`,
+        )
+        assert(!(await node.quiet()).some((m) => m.type === 'run-action'), `${status} was sent to node`)
+      }
+      for (const status of ['not-ready', 'not-configured']) {
+        node.send(hello({ status, message: 'Wait' }))
+        await editor.next(
+          (m) => m.type === 'catalogs' && m.catalogs.fixture?.groups[0].actions[0].availability.status === status,
+        )
+        controller.send({ type: 'macro-trigger', requestId: status, macroId: 'legacy' })
+        const run = await node.next((m) => m.type === 'run-action')
+        const response = {
+          type: 'action-result',
+          requestId: run.requestId,
+          ok: false,
+          error: { code: 'plugin-error', message: 'failed' },
+        }
+        node.send(response)
+        const result = await controller.next((m) => m.type === 'action-result' && m.requestId === status)
+        assert(
+          JSON.stringify(result) === JSON.stringify({ ...response, requestId: status }),
+          'node result changed or was not forwarded',
+        )
+      }
+      const second = await open(url)
+      local.push(second)
+      second.send({ type: 'hello', protocolVersion: PROTOCOL_VERSION, role: 'controller' })
+      await second.next((m) => m.type === 'snapshot')
+      controller.send({ type: 'macro-trigger', requestId: 'shared', macroId: 'legacy' })
+      second.send({ type: 'macro-trigger', requestId: 'shared', macroId: 'legacy' })
+      const firstRun = await node.next((m) => m.type === 'run-action')
+      const secondRun = await node.next((m) => m.type === 'run-action')
+      assert(firstRun.requestId !== secondRun.requestId, 'routed request ids collided')
+      node.send({ type: 'action-result', requestId: firstRun.requestId, ok: true })
+      node.send({ type: 'action-result', requestId: secondRun.requestId, ok: true })
+      assert((await controller.next((m) => m.type === 'action-result')).requestId === 'shared', 'first id changed')
+      assert((await second.next((m) => m.type === 'action-result')).requestId === 'shared', 'second id changed')
+    } finally {
+      for (const c of local) c.close()
+      child.kill('SIGTERM')
+      await new Promise((resolve) => child.once('exit', resolve))
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  await check('in-flight caps apply across request types and recover on result and disconnect', async () => {
+    const nodeId = uid('cap-node')
+    const node = await connect()
+    node.send({
+      type: 'hello',
+      protocolVersion: PROTOCOL_VERSION,
+      role: 'node',
+      nodeId,
+      label: 'Cap',
+      platform: 'linux',
+      catalog: {
+        groups: [{ id: 'g', label: 'G', actions: [{ actionId: 'cap/action', label: 'Cap', actionFields: [] }] }],
+      },
+    })
+    await node.next((m) => m.type === 'plugin-sync')
+    const editors = []
+    for (let i = 0; i < 5; i++) editors.push((await connected()).c)
+    const macro = { ...makeMacro(), nodeId, actionId: 'cap/action' }
+    editors[0].send({ type: 'upsert-macro', macro })
+    await editors[0].next((m) => isPatch(m) && m.macros?.[macro.id])
+    const option = (client, id) =>
+      client.send({ type: 'list-options', requestId: id, nodeId, actionId: 'cap/action', field: 'x' })
+    for (let i = 0; i < 32; i++) option(editors[0], `a${i}`)
+    const runs = []
+    for (let i = 0; i < 32; i++) runs.push(await node.next((m) => m.type === 'list-options'))
+    editors[0].send({ type: 'macro-trigger', requestId: 'over-client', macroId: macro.id })
+    const assertCap = (r) =>
+      assert(
+        !r.ok && r.error.code === 'action-failed' && r.error.message === 'Too many requests in flight',
+        'wrong cap response',
+      )
+    assertCap(await editors[0].next((m) => m.type === 'action-result' && m.requestId === 'over-client'))
+    node.send({ type: 'action-result', requestId: runs[0].requestId, ok: true })
+    await editors[0].next((m) => m.type === 'action-result' && m.requestId === 'a0')
+    editors[0].send({ type: 'macro-trigger', requestId: 'recovered', macroId: macro.id })
+    await node.next((m) => m.type === 'run-action')
+    for (let j = 1; j <= 3; j++) for (let i = 0; i < 32; i++) option(editors[j], `b${j}-${i}`)
+    for (let i = 0; i < 96; i++) await node.next((m) => m.type === 'list-options')
+    option(editors[4], 'over-node')
+    assertCap(await editors[4].next((m) => m.type === 'action-result' && m.requestId === 'over-node'))
+    editors[1].close()
+    await editors[1].waitClose()
+    option(editors[4], 'after-disconnect')
+    await node.next((m) => m.type === 'list-options')
+    node.close()
+  })
+
   /* -- action routing ------------------------------------------------------ */
   section('Action routing')
 
@@ -608,7 +1000,7 @@ async function main() {
     const { c: editor } = await connected('editor')
     const macro = {
       ...makeMacro('Harness shell command'),
-      actionId: 'shellCommand',
+      actionId: 'core-system/shellCommand',
       parameters: { command: `touch "${marker}"` },
     }
     editor.send({ type: 'upsert-macro', macro })
@@ -653,12 +1045,13 @@ async function main() {
     // A fake node with a uniquely named toggle action, so the real action
     // server never claims it.
     const actionId = uid('harnessToggle')
+    const stateNodeId = uid('node')
     const node = await connect()
     node.send({
       type: 'hello',
       protocolVersion: PROTOCOL_VERSION,
       role: 'node',
-      nodeId: uid('node'),
+      nodeId: stateNodeId,
       label: 'Harness state node',
       platform: 'linux',
       catalog: {
@@ -686,6 +1079,7 @@ async function main() {
     const macro = {
       ...makeMacro('Harness toggle'),
       actionId,
+      nodeId: stateNodeId,
       parameters: {},
     }
     editor.send({
