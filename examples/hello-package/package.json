@@ -1,0 +1,27 @@
+{
+  "name": "macrotouch-plugin-hello-package",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --outfile=server.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "macrotouch": {
+    "id": "hello-package",
+    "label": "Hello package",
+    "icon": "ic:baseline-waving-hand",
+    "apiVersion": 1,
+    "server": "server.mjs",
+    "actions": {
+      "hello": {
+        "description": "Log a greeting on the action server"
+      },
+      "toggle": {
+        "description": "Toggle a value and show its live state"
+      }
+    }
+  }
+}
