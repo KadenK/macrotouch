@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { CodeCheck, PluginAction, PluginContext, PluginModule } from '../plugin-sdk'
@@ -61,8 +61,54 @@ export class PluginHost {
   async load(): Promise<void> {
     for (const builtin of builtinPlugins)
       await this.add(builtin.pkg, async () => builtin.module, 'invalid-plugin', true)
+    await this.loadExternal()
     await this.recheck()
     this.timer = setInterval(() => void this.refreshReadiness(), 30000)
+  }
+  /** Load packages copied directly to <data dir>/plugins. */
+  private async loadExternal(): Promise<void> {
+    const root = path.join(this.dataRoot, 'plugins')
+    let entries
+    try {
+      entries = await readdir(root, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        console.warn(`[plugins] Cannot read ${root}:`, errorText(error))
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+      const directory = path.join(root, entry.name)
+      try {
+        const info = await lstat(directory)
+        if (info.isSymbolicLink()) throw new Error('Plugin directory is a symbolic link')
+        const pkg = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8')) as unknown
+        const manifest = readManifest(pkg)
+        if (!validId(manifest.id)) throw new Error('Plugin id is reserved or invalid for a user plugin')
+        const server = manifest.server ?? 'server.mjs'
+        if (!isSafePluginPath(server)) throw new Error('Invalid plugin server path')
+        const entryPath = path.resolve(directory, server)
+        if (!entryPath.startsWith(`${path.resolve(directory)}${path.sep}`) || !existsSync(entryPath))
+          throw new Error('Missing plugin server entry')
+        await this.add(
+          pkg,
+          async (m) => (await import(pathToFileURL(path.resolve(directory, m.server ?? 'server.mjs')).href)).default,
+          entry.name,
+          false,
+          undefined,
+        )
+      } catch (error) {
+        console.warn(`[plugins] Failed to load ${directory}:`, errorText(error))
+        try {
+          const pkg = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8')) as {
+            macrotouch?: { id?: unknown }
+          }
+          await this.addError(typeof pkg.macrotouch?.id === 'string' ? pkg.macrotouch.id : entry.name, errorText(error))
+        } catch {
+          await this.addError(entry.name, errorText(error))
+        }
+      }
+    }
   }
   private async loadCached(id: string, sha256: string): Promise<void> {
     const dir = path.join(this.cache.root, id, sha256)
