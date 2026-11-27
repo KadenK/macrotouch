@@ -391,7 +391,9 @@ separately and mark untested platforms as **not verified** rather than leaving t
 | AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell `SendKeys` / `nircmd` | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
 
 **AC-01 — Shell Command.** A command with an observable side effect (e.g. writing a file) runs and
-produces that effect. An empty or missing command logs a warning and does nothing.
+produces that effect. An empty or missing command logs a warning and does nothing. Include a quoted
+argument, such as a file name with a space (`type nul > "mt check.txt"` on Windows,
+`touch "mt check.txt"` elsewhere): on Windows, quoted commands used to fail.
 ⚠ The command string is passed to the shell unquoted and unescaped — shell metacharacters in the
 field are interpreted. That is current behavior and the field is trusted input.
 
