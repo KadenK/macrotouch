@@ -190,9 +190,7 @@ const screenBgHex = colorSetting('defaultScreenBgColor')
 const macroIconHex = colorSetting('defaultMacroIconColor')
 const macroBgHex = colorSetting('defaultMacroBackgroundColor')
 const screenSize = setting('defaultScreenSize')
-
-// Not wired up yet.
-const buttonHaptics = ref(false)
+const buttonHaptics = setting('buttonHaptics')
 
 // --- Desktop app settings (only present inside Electron) ---
 type DesktopSettings = { trayEnabled: boolean; minimizeOnClose: boolean; startOnBoot: boolean }
