@@ -186,7 +186,7 @@ export class StateStore {
     const badAnchor = this.outOfRange(screen, anchor)
     if (badAnchor) return badAnchor
     if (!fits(screen, this.state.macros, placed.macroId, anchor, cmd.span)) {
-      return err('invalid-message', `A ${cmd.span.rows}x${cmd.span.columns} macro does not fit there`)
+      return err('invalid-message', `A ${cmd.span.columns}x${cmd.span.rows} macro does not fit there`)
     }
 
     const { span: _old, ...rest } = macro
