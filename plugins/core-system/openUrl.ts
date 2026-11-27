@@ -1,5 +1,5 @@
 import { ActionType, defineAction, type Parameters, type PluginOS } from '../../plugin-sdk'
-import { openWithSystem } from './opener'
+import { openUrlWithSystem } from './opener'
 
 /** Only http and https allowed. */
 function parseWebUrl(parameters: Parameters): string {
@@ -15,7 +15,7 @@ function parseWebUrl(parameters: Parameters): string {
   return url.href
 }
 
-const run = (platform: PluginOS) => (parameters: Parameters) => openWithSystem(parseWebUrl(parameters), platform)
+const run = (platform: PluginOS) => (parameters: Parameters) => openUrlWithSystem(parseWebUrl(parameters), platform)
 
 const action = defineAction({
   id: 'openUrl',

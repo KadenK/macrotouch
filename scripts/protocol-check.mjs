@@ -820,7 +820,8 @@ async function main() {
         server.close(() => resolve(port))
       })
     })
-    const child = spawn('node_modules/.bin/tsx', ['master-server/protocol-fixture.ts'], {
+    // Windows can't spawn .bin shims.
+    const child = spawn(process.execPath, ['--import', 'tsx', 'master-server/protocol-fixture.ts'], {
       env: { ...process.env, MACROTOUCH_DATA_DIR: dir, WS_PORT: String(port) },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -1001,7 +1002,8 @@ async function main() {
     const macro = {
       ...makeMacro('Harness shell command'),
       actionId: 'core-system/shellCommand',
-      parameters: { command: `touch "${marker}"` },
+      // cmd.exe has no `touch`.
+      parameters: { command: process.platform === 'win32' ? `type nul > "${marker}"` : `touch "${marker}"` },
     }
     editor.send({ type: 'upsert-macro', macro })
     await editor.next(isPatch)
