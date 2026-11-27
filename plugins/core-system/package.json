@@ -8,11 +8,37 @@
     "label": "System",
     "icon": "ic:baseline-settings",
     "apiVersion": 1,
-    "checks": {},
+    "checks": {
+      "linux-clipboard": {
+        "anyOf": [
+          {
+            "type": "command",
+            "name": {
+              "linux": "wl-copy"
+            }
+          },
+          {
+            "type": "command",
+            "name": {
+              "linux": "xclip"
+            }
+          }
+        ],
+        "message": "Neither wl-copy nor xclip is installed",
+        "hint": "Install wl-clipboard (Wayland) or xclip (X11)"
+      }
+    },
     "actions": {
       "launchApp": {},
       "shellCommand": {},
-      "sendNotification": {}
+      "sendNotification": {},
+      "openUrl": {},
+      "openPath": {},
+      "setClipboard": {
+        "requires": [
+          "linux-clipboard"
+        ]
+      }
     }
   }
 }

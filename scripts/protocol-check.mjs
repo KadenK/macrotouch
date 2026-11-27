@@ -1016,6 +1016,24 @@ async function main() {
     assert(ran, 'the action server did not run the shell command (is it connected to the master?)')
   })
 
+  await check('Open URL refuses non-web URLs', async () => {
+    const { c: editor } = await connected('editor')
+    const macro = {
+      ...makeMacro('Harness open URL'),
+      actionId: 'core-system/openUrl',
+      parameters: { url: 'file:///etc/passwd' },
+    }
+    editor.send({ type: 'upsert-macro', macro })
+    await editor.next(isPatch)
+
+    const { c: controller } = await connected('controller')
+    const requestId = uid('request')
+    controller.send({ type: 'macro-trigger', requestId, macroId: macro.id })
+    const result = await controller.next((m) => m.type === 'action-result' && m.requestId === requestId)
+    assert(!result.ok, 'a file: URL was opened')
+    assert(/http/.test(result.error?.message ?? ''), `unexpected error: ${JSON.stringify(result.error)}`)
+  })
+
   await check('an oversized row is clamped to the declared columns (SC-06)', async () => {
     const { c } = await connected()
     const screen = makeScreen(1, 3)
