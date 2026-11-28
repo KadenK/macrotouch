@@ -465,16 +465,21 @@ already-connected devices (see RT-06/RT-09).
 **SE-09 — `Attempt to Fullscreen` is live.** Toggling it and saving changes runtime behavior on the
 next runtime page load.
 
-**SE-10 — Inert toggles.** ⚠ `Button haptics` is rendered but **not wired to anything**. It does not persist, does not survive a page
+~~**SE-10 — Inert toggles.** ⚠ `Button haptics` is rendered but **not wired to anything**. It does not persist, does not survive a page
 reload, and has no effect. This is current behavior, not a regression — do not implement them
-inside a MAC-11 ticket.
+inside a MAC-11 ticket.~~ Removed by [MAC-45](https://linear.app/macrotouch/issue/MAC-45): haptics is wired; SE-13 covers it.
 
 **SE-12 — `Start on boot` is live (desktop app only).** Toggling it registers or removes an OS login
 item (Linux: `~/.config/autostart/macrotouch.desktop`). At login the app starts hidden in the tray
 when the tray icon is enabled. The toggle reflects the OS state on launch. Not covered by `test:ui`.
 
-**SE-11 — Settings round-trip.** Save settings, restart the app, reopen Settings. The two working
-toggles, color and grid size are as saved.
+**SE-11 — Settings round-trip.** Save settings, restart the app, reopen Settings. The working
+toggles (including `Button haptics`), color and grid size are as saved.
+
+**SE-13 — `Button haptics` is live.** With the toggle on, pressing a macro on a paired Android
+phone gives a short vibration; with it off, there is none. The setting saves immediately, survives
+a restart, and reaches already-connected devices. iOS Safari has no vibration API, so nothing
+happens there either way. Persistence is covered by `test:ui`; the vibration itself is manual.
 
 ---
 
@@ -575,4 +580,4 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | AC-05/06 | macOS needs Accessibility permission; without it, input actions fail silently |
 | AC-07 | macOS `Mute` does not toggle; behavior depends on Music/Spotify being open |
 | SE-03 | `Cancel` does not leave the Settings page |
-| SE-10 | The `Button haptics` toggle is decorative and does nothing |
+| ~~SE-10~~ | ~~The `Button haptics` toggle is decorative and does nothing~~ (fixed by MAC-45) |

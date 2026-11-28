@@ -1330,6 +1330,7 @@ async function main() {
       assert(s.defaultScreenSize?.columns === 5, `expected default columns 5, got ${s.defaultScreenSize?.columns}`)
       assert(typeof s.attemptFullscreen === 'boolean', 'attemptFullscreen missing from seeded settings')
       assert(typeof s.swipeToChangeScreens === 'boolean', 'swipeToChangeScreens missing from seeded settings')
+      assert(typeof s.buttonHaptics === 'boolean', 'buttonHaptics missing from seeded settings')
     })
   }
 

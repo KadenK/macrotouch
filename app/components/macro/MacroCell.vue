@@ -157,6 +157,8 @@ function openEditor() {
 
 function handleTrigger(value?: ActionStateValue) {
   if (mode !== 'interact' || !macroId || !store.getMacro(macroId)) return
+  // No-op where unsupported (iOS).
+  if (store.settings.buttonHaptics) navigator.vibrate?.(10)
   store.triggerMacro(macroId, value)
 }
 </script>
