@@ -234,15 +234,16 @@ await check('SC-03', 'Edit Current Screen opens "Edit Screen" pre-filled', async
 await check('SC-04', 'grid size 0 and 99 clamp into 1..20', async () => {
   await win.locator('button.btn-secondary').click()
   await win.waitForSelector('.modal-container')
-  await win.locator('.edit-form input.number-input').nth(0).fill('0')
-  await win.locator('.edit-form input.number-input').nth(1).fill('99')
+  // Columns first, then rows.
+  await win.locator('.edit-form input.number-input').nth(0).fill('99')
+  await win.locator('.edit-form input.number-input').nth(1).fill('0')
   await win.locator('.save-btn').click()
-  await until(async () => (await cells().count()) === 20, `expected 1x20 = 20 cells, got ${await cells().count()}`)
+  await until(async () => (await cells().count()) === 20, `expected 20x1 = 20 cells, got ${await cells().count()}`)
   await win.locator('button.btn-secondary').click()
   await win.waitForSelector('.modal-container')
-  const r = await win.locator('.edit-form input.number-input').nth(0).inputValue()
-  const c = await win.locator('.edit-form input.number-input').nth(1).inputValue()
-  assert(r === '1' && c === '20', `clamped to ${r}x${c}`)
+  const c = await win.locator('.edit-form input.number-input').nth(0).inputValue()
+  const r = await win.locator('.edit-form input.number-input').nth(1).inputValue()
+  assert(c === '20' && r === '1', `clamped to ${c}x${r}`)
   await win.locator('.cancel-btn').click()
 })
 await check('SC-05', 'growing a grid preserves existing macros', async () => {

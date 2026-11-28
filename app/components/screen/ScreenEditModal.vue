@@ -12,13 +12,13 @@
           <label>Grid Size</label>
           <div class="grid-size-inputs">
             <div class="grid-size-field">
-              <label class="sub-label">Rows</label>
-              <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
+              <label class="sub-label">Columns</label>
+              <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
             </div>
             <span class="grid-divider">×</span>
             <div class="grid-size-field">
-              <label class="sub-label">Columns</label>
-              <input v-model.number="editForm.columns" type="number" class="text-input number-input" min="1" max="20" />
+              <label class="sub-label">Rows</label>
+              <input v-model.number="editForm.rows" type="number" class="text-input number-input" min="1" max="20" />
             </div>
           </div>
         </div>

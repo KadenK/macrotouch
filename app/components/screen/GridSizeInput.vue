@@ -1,7 +1,5 @@
 <template>
   <div class="grid-size" aria-label="Grid size">
-    <UnderlineInput v-model="rows" class="size-input" type="number" min="1" max="20" aria-label="Rows" @change="commit" />
-    <span class="size-divider" aria-hidden="true">×</span>
     <UnderlineInput
       v-model="columns"
       class="size-input"
@@ -9,6 +7,16 @@
       min="1"
       max="20"
       aria-label="Columns"
+      @change="commit"
+    />
+    <span class="size-divider" aria-hidden="true">×</span>
+    <UnderlineInput
+      v-model="rows"
+      class="size-input"
+      type="number"
+      min="1"
+      max="20"
+      aria-label="Rows"
       @change="commit"
     />
   </div>

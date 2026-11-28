@@ -389,6 +389,10 @@ separately and mark untested platforms as **not verified** rather than leaving t
 | AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys`; `keybd_event` when the combo has the Windows key | `xdotool`, falling back to `ydotool` |
 | AC-06 | Type Text | `osascript` keystroke | PowerShell `SendKeys` | `xdotool type`, falling back to `ydotool type` |
 | AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell media keys (`SendKeys`), nothing to install | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
+| AC-10 | Open URL | `open` | `rundll32 url.dll,FileProtocolHandler` | `xdg-open` |
+| AC-11 | Open File or Folder | `open` | `explorer.exe` | `xdg-open` |
+| AC-12 | Set Clipboard | `pbcopy` | `clip` | `wl-copy` on Wayland, else `xclip` |
+
 
 **AC-01 — Shell Command.** A command with an observable side effect (e.g. writing a file) runs and
 produces that effect. An empty or missing command logs a warning and does nothing. Include a quoted
@@ -435,6 +439,19 @@ warning on trigger and does nothing.
 **AC-09 — Failing action does not take down the host.** Trigger a Shell Command that exits non-zero
 and a Launch App pointing at a nonexistent path. Both log an error and the app keeps serving, with
 subsequent triggers still working.
+
+**AC-10: Open URL.** An `http(s)://` URL opens in the default browser, not the file manager. Any
+other scheme (e.g. `file:`, `mailto:`) is refused with an error and nothing opens. A blank or
+malformed URL is also refused.
+
+**AC-11: Open File or Folder.** A file opens in its default app and a folder opens in the file
+manager. On Windows, a path written with `/` still opens the right place. A path that does not
+exist is refused with an error.
+
+**AC-12: Set Clipboard.** Trigger, then paste: the exact text is on the clipboard, including
+non-ASCII text (e.g. `café ✓`) and multiple lines.
+⚠ On Linux, AC-10 and AC-11 need `xdg-open`, and AC-12 needs `wl-copy` (Wayland) or `xclip`
+(X11). Without them the action fails with a spawn error. Stock WSL Ubuntu has none of these.
 
 ---
 
