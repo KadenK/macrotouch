@@ -8,6 +8,7 @@ import { icons as fileIcons } from '@iconify-json/file-icons'
 import { colorToHex, type Macro } from '~/../shared/types'
 import { useMacroStore } from '~/stores/macro'
 import { setPluginFaces } from '~/composables/useMacroFace'
+import { macroImageSrc } from '~/composables/useMacroImage'
 
 const collections: Record<string, typeof ic> = {
   ic,
@@ -76,7 +77,7 @@ class HostMacroFace extends HTMLElement {
   render() {
     const root = this.shadowRoot!
     root.innerHTML =
-      '<style>:host{display:block;width:100%;height:100%;position:relative}.face{width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:8px}mt-icon{width:75%;height:75%;min-width:50px;aspect-ratio:1}.label{position:absolute;right:0;bottom:0;left:0;padding:0 .5rem .4rem;font-size:.75rem;line-height:1.2;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}</style>'
+      '<style>:host{display:block;width:100%;height:100%;position:relative}.face{overflow:hidden;position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;border-radius:8px}mt-icon{width:75%;height:75%;min-width:50px;aspect-ratio:1}.label{position:absolute;right:0;bottom:0;left:0;padding:0 .5rem .4rem;font-size:.75rem;line-height:1.2;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}</style>'
     if (!this.current) return
     const face = document.createElement('div')
     face.className = 'face'
@@ -84,7 +85,17 @@ class HostMacroFace extends HTMLElement {
     face.style.color = colorToHex(this.current.iconColor)
     const icon = document.createElement('mt-icon')
     icon.setAttribute('name', this.current.icon.source === 'LIBRARY' ? this.current.icon.value : '')
-    face.append(icon)
+    const imageSrc = macroImageSrc(this.current.icon)
+    if (imageSrc) {
+      const img = document.createElement('img')
+      img.src = imageSrc
+      img.draggable = false
+      const fill = this.current.icon.image?.mode === 'fill'
+      img.style.cssText = fill
+        ? 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none'
+        : 'width:75%;height:75%;object-fit:contain;border-radius:8px;pointer-events:none'
+      face.append(img)
+    } else face.append(icon)
     root.append(face)
     if (this.labels) {
       const label = document.createElement('span')

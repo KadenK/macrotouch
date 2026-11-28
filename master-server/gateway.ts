@@ -8,6 +8,7 @@ import { ActionRouter } from './action-router'
 import { NodeRegistry } from './node-registry'
 import { isLoopback, type PairingToken } from './pairing'
 import { StateFile } from './state-file'
+import { MacroImages, collectImageRefs } from './macro-images'
 import { StateStore, isProtocolError } from './state-store'
 import { parseClientMessage } from './validate'
 
@@ -52,6 +53,8 @@ export type GatewayOptions = {
   /** Shared with the HTTP server, so a regeneration takes effect on both at once. */
   pairing: PairingToken
   plugins?: PluginRegistry
+  /** Custom macro images; unused ones are deleted as the state changes. */
+  images?: MacroImages
   /** Called when Electron on this computer asks the master to stop. */
   onQuit?: () => void
 }
@@ -61,6 +64,19 @@ export function startGateway(port: number, options: GatewayOptions) {
   const plugins = options.plugins ?? new PluginRegistry(new StateFile().dataRoot)
   const stateFile = new StateFile()
   const store = new StateStore(stateFile.load())
+  const images = options.images ?? new MacroImages(stateFile.dataRoot)
+  // Deleting images is slow and nothing is urgent about it: at most once a minute, after a save.
+  let gcTimer: NodeJS.Timeout | undefined
+  const sweepImages = () => {
+    gcTimer = undefined
+    const { ids, bakes } = collectImageRefs(store.getState())
+    void images.gc(ids, bakes).catch((err) => console.error('[Images] cleanup failed:', err))
+  }
+  const scheduleImageSweep = () => {
+    gcTimer ??= setTimeout(sweepImages, 60_000)
+    gcTimer.unref()
+  }
+  sweepImages()
   plugins.setCurrentState(() => store.getState().plugins)
   const nodes = new NodeRegistry()
   const router = new ActionRouter(nodes)
@@ -499,6 +515,7 @@ export function startGateway(port: number, options: GatewayOptions) {
         }
         if (msg.type === 'delete-plugin') plugins.delete(msg.pluginId)
         stateFile.save(store.getState())
+        scheduleImageSweep()
         broadcast(result)
         if (msg.type === 'delete-plugin' || msg.type === 'update-plugin') syncAll()
         // The edit may have bound, unbound or moved a stateful macro on a viewed screen.

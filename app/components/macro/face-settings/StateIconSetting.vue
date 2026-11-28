@@ -19,6 +19,7 @@
           :model-value="perState[value].icon"
           :icon-color="perState[value].iconColorHex"
           :background-color="perState[value].bgColorHex"
+          :span="macro.span"
           @update:model-value="setOverride(value, 'icon', $event)"
         />
         <div class="form-group">
@@ -98,10 +99,15 @@ const perState = computed(() => {
   return result
 })
 
+/** An image icon is the same only with the same crop, not just the same id. */
+function sameIcon(a: Icon, b: Icon): boolean {
+  return a.source === b.source && a.value === b.value && JSON.stringify(a.image) === JSON.stringify(b.image)
+}
+
 /** Record a change, or drop it when it is back to the default. */
 function setOverride<K extends keyof StateOverride>(value: ToggleValue, field: K, next: StateOverride[K]) {
   const fallback = defaultFor(value)[field]
-  const same = field === 'icon' ? (next as Icon).value === (fallback as Icon).value : next === fallback
+  const same = field === 'icon' ? sameIcon(next as Icon, fallback as Icon) : next === fallback
   const merged: StateOverride = { ...overrides.value[value], [field]: same ? undefined : next }
   const current = Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined)) as StateOverride
   overrides.value[value] = Object.keys(current).length ? current : undefined
@@ -135,7 +141,7 @@ watch(
     }
     stateAppearance.value = result
     const offIcon = perState.value.false.icon
-    if (base.value.icon.value !== offIcon.value) base.value = { ...base.value, icon: offIcon }
+    if (!sameIcon(base.value.icon, offIcon)) base.value = { ...base.value, icon: offIcon }
   },
   { deep: true, immediate: true },
 )

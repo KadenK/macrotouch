@@ -111,3 +111,5 @@ If packaging still fails, confirm that the local Nuxt and Electron runtime can s
 Copyright (C) 2026 The MacroTouch contributors
 
 MacroTouch is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
+
+Custom macro images use `sharp`, a native module whose binaries are per-platform optional packages (`@img/sharp-*`) that npm installs only for the machine running `npm install`. Cross-building Windows from Linux (`npm run dist:wine`) needs the Windows ones first: `npm i --no-save --os=win32 --cpu=x64 sharp`. Run `npm install` afterwards to restore the host's own binaries. Packaging for the machine you are on needs nothing extra.

@@ -3,6 +3,9 @@ import http from 'http'
 import os from 'os'
 import path from 'path'
 import type { PluginRegistry } from './plugin-registry'
+import { ImageError, bakedContentType, originalContentType, type MacroImages } from './macro-images'
+import { BAKED_FILE_RE, IMAGE_ID_RE } from './image-ids'
+import { IMAGE_LIMITS } from '../shared/types/macro'
 import { isSafePluginPath } from '../shared/types/plugin'
 import { isLoopback, type PairingToken } from './pairing'
 
@@ -80,7 +83,80 @@ const DENIED_PAGE = `<!doctype html>
 <p>Open the Connect page on the host computer and scan the QR code again.</p>
 `
 
-export function startHttpServer(port: number, staticDir: string, pairing: PairingToken, plugins: PluginRegistry) {
+/** A browser page on this computer (the dev UI runs on another port) or no page at all (curl, Electron). */
+const isLocalOrigin = (origin: string | undefined) => {
+  if (!origin) return true
+  try {
+    const host = new URL(origin).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+  } catch {
+    return false
+  }
+}
+
+const IMAGE_CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'content-type, x-pairing-token',
+  'Access-Control-Max-Age': '600',
+}
+
+/** Headers that stop an image from ever being treated as a page, whatever it contains. */
+const IMAGE_SAFETY = {
+  'X-Content-Type-Options': 'nosniff',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+  'Cross-Origin-Resource-Policy': 'cross-origin',
+}
+
+const sendJson = (res: http.ServerResponse, status: number, body: unknown, headers: http.OutgoingHttpHeaders = {}) => {
+  res.writeHead(status, { 'Content-Type': 'application/json', ...IMAGE_CORS, ...headers })
+  res.end(JSON.stringify(body))
+}
+
+/** The body, or null once it passes `limit` (the request is then answered and cut off). */
+const readBody = (req: http.IncomingMessage, res: http.ServerResponse, limit: number) =>
+  new Promise<Buffer | null>((resolve) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    let done = false
+    const tooLarge = () => {
+      if (done) return
+      done = true
+      sendJson(res, 413, { error: 'Request body is too large' }, { Connection: 'close' })
+      res.once('finish', () => req.destroy())
+      resolve(null)
+    }
+    if (Number(req.headers['content-length']) > limit) return tooLarge()
+    req.on('data', (chunk: Buffer) => {
+      if (done) return
+      size += chunk.length
+      if (size > limit) {
+        chunks.length = 0
+        return tooLarge()
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => {
+      if (!done) {
+        done = true
+        resolve(Buffer.concat(chunks))
+      }
+    })
+    req.on('error', () => {
+      if (!done) {
+        done = true
+        resolve(null)
+      }
+    })
+  })
+
+export function startHttpServer(
+  port: number,
+  staticDir: string,
+  pairing: PairingToken,
+  plugins: PluginRegistry,
+  images: MacroImages,
+) {
   const root = path.resolve(staticDir)
 
   const sendFile = (res: http.ServerResponse, filePath: string, headOnly: boolean) => {
@@ -93,6 +169,118 @@ export function startHttpServer(port: number, staticDir: string, pairing: Pairin
     fs.createReadStream(filePath).pipe(res)
   }
 
+  const sendImage = (res: http.ServerResponse, file: string, contentType: string, cache: string, headOnly: boolean) => {
+    fs.stat(file, (err, stat) => {
+      if (err || !stat.isFile()) {
+        res.writeHead(404, IMAGE_CORS).end()
+        return
+      }
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Content-Length': stat.size,
+        'Cache-Control': cache,
+        ...IMAGE_CORS,
+        ...IMAGE_SAFETY,
+      })
+      if (headOnly) res.end()
+      else fs.createReadStream(file).pipe(res)
+    })
+  }
+
+  const handleImageRequest = async (
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    pathname: string,
+    isEditor: () => boolean,
+  ) => {
+    const method = req.method ?? 'GET'
+    try {
+      if (method === 'OPTIONS') {
+        res.writeHead(204, IMAGE_CORS).end()
+        return
+      }
+
+      if (method === 'POST') {
+        const bake = /^\/api\/macro-image\/([^/]+)\/bake$/.exec(pathname)
+        if (pathname !== '/api/macro-image' && !bake) {
+          res.writeHead(404, IMAGE_CORS).end()
+          return
+        }
+        if (!isEditor()) {
+          console.warn(`[Images] refused ${pathname} from ${req.socket.remoteAddress ?? 'unknown'}`)
+          sendJson(res, 401, { error: 'Pairing token required' })
+          return
+        }
+        if (bake) {
+          if (!IMAGE_ID_RE.test(bake[1]!)) {
+            sendJson(res, 404, { error: 'No such image' })
+            return
+          }
+          const body = await readBody(req, res, 4096)
+          if (!body) return
+          let options: { span?: unknown; crop?: unknown }
+          try {
+            options = JSON.parse(body.toString('utf8'))
+          } catch {
+            sendJson(res, 400, { error: 'Body must be JSON' })
+            return
+          }
+          sendJson(res, 200, await images.bake(bake[1]!, { span: options?.span, crop: options?.crop }))
+          return
+        }
+        const body = await readBody(req, res, IMAGE_LIMITS.maxBytes)
+        if (!body) return
+        sendJson(res, 200, await images.ingest(body, req.headers['content-type']))
+        return
+      }
+
+      if (method !== 'GET' && method !== 'HEAD') {
+        res.writeHead(405, IMAGE_CORS).end()
+        return
+      }
+      const headOnly = method === 'HEAD'
+
+      // Matched on the raw path: no decoding, so nothing like `..%2f` ever reaches the file system.
+      const baked = pathname.startsWith('/macro-images/baked/') && BAKED_FILE_RE.exec(pathname.slice(20))
+      if (baked) {
+        const [, id, rev, ext] = baked
+        sendImage(
+          res,
+          images.bakedFile(id!, rev!, ext!),
+          bakedContentType(ext!),
+          'public, max-age=31536000, immutable',
+          headOnly,
+        )
+        return
+      }
+
+      const original = pathname.startsWith('/macro-images/originals/') && pathname.slice(24)
+      if (original && IMAGE_ID_RE.test(original)) {
+        if (!isEditor()) {
+          console.warn(`[Images] refused ${pathname} from ${req.socket.remoteAddress ?? 'unknown'}`)
+          res.writeHead(401, IMAGE_CORS).end()
+          return
+        }
+        const found = images.findOriginal(original)
+        if (!found) {
+          res.writeHead(404, IMAGE_CORS).end()
+          return
+        }
+        sendImage(res, found.file, originalContentType(found.ext), 'private, max-age=60', headOnly)
+        return
+      }
+
+      res.writeHead(404, IMAGE_CORS).end()
+    } catch (err) {
+      if (res.headersSent) return
+      if (err instanceof ImageError) sendJson(res, err.status, { error: err.message })
+      else {
+        console.error('[Images] request failed:', err)
+        sendJson(res, 500, { error: 'Internal error' })
+      }
+    }
+  }
+
   const server = http.createServer((req, res) => {
     const { pathname, searchParams } = new URL(req.url ?? '/', 'http://localhost')
 
@@ -100,6 +288,26 @@ export function startHttpServer(port: number, staticDir: string, pairing: Pairin
       // Open to any origin so a web app served from elsewhere can ask a remote master.
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
       res.end(req.method === 'HEAD' ? undefined : JSON.stringify(listAddresses()))
+      return
+    }
+
+    // The real socket address, not a header. `x-forwarded-for` is supplied by
+    // the client and can say anything.
+    const local = isLoopback(req.socket.remoteAddress)
+
+    // Custom macro images. Handled before everything else: the page gate below
+    // would treat the extensionless original URLs as pages.
+    if (pathname.startsWith('/api/macro-image') || pathname.startsWith('/macro-images/')) {
+      // An editor is on this computer (and, if a web page, one served from here) or holds the token.
+      const isEditor = () => {
+        const token = req.headers['x-pairing-token']
+        return (
+          (local && isLocalOrigin(req.headers.origin)) ||
+          pairing.verify(searchParams.get('token')) ||
+          pairing.verify(Array.isArray(token) ? token[0] : token)
+        )
+      }
+      void handleImageRequest(req, res, pathname, isEditor)
       return
     }
 
@@ -132,9 +340,6 @@ export function startHttpServer(port: number, staticDir: string, pairing: Pairin
       return
     }
 
-    // The real socket address, not a header. `x-forwarded-for` is supplied by
-    // the client and can say anything.
-    const local = isLoopback(req.socket.remoteAddress)
     if (!local && isPageRequest(pathname)) {
       if (!pairing.verify(searchParams.get('token'))) {
         console.warn(`[Pairing] refused ${pathname} from ${req.socket.remoteAddress ?? 'unknown'}`)
