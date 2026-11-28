@@ -28,6 +28,8 @@ import path from 'node:path'
 import net from 'node:net'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import http from 'node:http'
+import sharp from 'sharp'
 
 const WS_URL = process.env.WS_URL ?? 'ws://127.0.0.1:4322'
 const HTTP_URL = process.env.HTTP_URL ?? 'http://127.0.0.1:4321'
@@ -528,8 +530,7 @@ async function main() {
     )
     c.send({ type: 'test-plugin', requestId: 'offline-test', nodeId: 'missing-node', pluginId: 'x' })
     assert(
-      (await c.next((m) => m.type === 'action-result' && m.requestId === 'offline-test')).error.code ===
-        'node-offline',
+      (await c.next((m) => m.type === 'action-result' && m.requestId === 'offline-test')).error.code === 'node-offline',
       'plugin test did not report offline',
     )
     const macro = { ...makeMacro(), nodeId: 'missing-node', actionId: 'x/y' }
@@ -1300,6 +1301,8 @@ async function main() {
     }
   }
 
+  await imageChecks()
+
   /* -- persistence --------------------------------------------------------- */
   section('Persistence')
 
@@ -1351,6 +1354,435 @@ async function main() {
   })
 
   return report()
+}
+
+/* ------------------------------------------------------------------ images */
+
+/** One raw HTTP request, so a path like `/../x` reaches the server unnormalised. */
+function rawRequest(base, method, rawPath, { headers = {}, body } = {}) {
+  const url = new URL(base)
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: url.hostname, port: url.port, method, path: rawPath, headers }, (res) => {
+      const chunks = []
+      res.on('data', (c) => chunks.push(c))
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }))
+    })
+    req.on('error', reject)
+    req.end(body)
+  })
+}
+
+async function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer()
+    server.on('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port
+      server.close(() => resolve(port))
+    })
+  })
+}
+
+async function imageChecks() {
+  section('Custom macro images')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-images-'))
+  const port = await freePort()
+  const base = `http://127.0.0.1:${port}`
+  const staticDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mt-images-static-'))
+  const env = {
+    ...process.env,
+    MACROTOUCH_STATIC_DIR: staticDir,
+    MACROTOUCH_DATA_DIR: dir,
+    MACROTOUCH_HTTP_PORT: String(port),
+  }
+  const child = spawn('node_modules/.bin/tsx', ['master-server/image-fixture.ts'], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('image fixture did not start')), 8000)
+      child.stdout.on('data', (chunk) => {
+        if (chunk.toString().includes('HTTP server started')) {
+          clearTimeout(timer)
+          resolve()
+        }
+      })
+      child.once('exit', () => {
+        clearTimeout(timer)
+        reject(new Error('image fixture exited'))
+      })
+    })
+    const token = JSON.parse(fs.readFileSync(path.join(dir, 'pairing.json'), 'utf-8')).token
+    const lan = Object.values(os.networkInterfaces())
+      .flat()
+      .find((i) => i && i.family === 'IPv4' && !i.internal)
+    const remote = lan ? `http://${lan.address}:${port}` : null
+
+    const upload = (body, type, root = base, query = '') =>
+      fetch(`${root}/api/macro-image${query}`, { method: 'POST', headers: { 'content-type': type }, body })
+    const bake = (id, span, crop, root = base, query = '') =>
+      fetch(`${root}/api/macro-image/${id}/bake${query}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ span, crop }),
+      })
+    const ok = async (res) => {
+      assert(res.status === 200, `expected 200, got ${res.status} ${await res.clone().text()}`)
+      return res.json()
+    }
+    const bakedUrl = (id, b, root = base) => `${root}/macro-images/baked/${id}-${b.rev}.${b.ext}`
+    const centre = { x: 0.5, y: 0.5, zoom: 1 }
+
+    // A gradient, so that a different crop is a different picture. Half transparent, to check alpha survives.
+    const pixels = Buffer.alloc(200 * 100 * 4)
+    for (let y = 0; y < 100; y++) {
+      for (let x = 0; x < 200; x++) pixels.set([x, y * 2, (x + y) % 256, 128], (y * 200 + x) * 4)
+    }
+    const png = await sharp(pixels, { raw: { width: 200, height: 100, channels: 4 } })
+      .png()
+      .toBuffer()
+    const frames = 3
+    const frame = (n) => Buffer.alloc(40 * 30 * 4, 0).fill(Buffer.from([n * 100, 50, 200, 255]))
+    const gif = await sharp(Buffer.concat([0, 1, 2].map(frame)), {
+      raw: { width: 40, height: 30 * frames, channels: 4, pageHeight: 30 },
+    })
+      .gif({ loop: 0, delay: [100, 100, 100] })
+      .toBuffer()
+    const evilSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 50" onload="alert(1)">
+      <script>alert(1)</script>
+      <rect width="100" height="50" fill="red" onclick="alert(2)"/>
+      <foreignObject width="10" height="10"><div xmlns="http://www.w3.org/1999/xhtml">x</div></foreignObject>
+      <a xlink:href="javascript:alert(3)"><circle r="5" cx="10" cy="10"/></a>
+      <image href="http://evil.example/x.png" width="10" height="10"/>
+      <style>@import url(http://evil.example/a.css); rect { fill: url(http://evil.example/p) }</style>
+    </svg>`
+
+    let pngInfo
+    await check('a PNG is stored as uploaded and described', async () => {
+      pngInfo = await ok(await upload(png, 'image/png'))
+      assert(/^[0-9a-f-]{36}$/.test(pngInfo.id), `bad id ${pngInfo.id}`)
+      assert(pngInfo.ext === 'png' && pngInfo.width === 200 && pngInfo.height === 100, JSON.stringify(pngInfo))
+      assert(pngInfo.animated === false, 'a PNG is not animated')
+      const stored = fs.readFileSync(path.join(dir, 'macro-images', 'originals', `${pngInfo.id}.png`))
+      assert(stored.equals(png), 'the original was changed')
+    })
+
+    await check('the format comes from the bytes, not the declared type', async () => {
+      const info = await ok(await upload(png, 'image/jpeg'))
+      assert(info.ext === 'png', `expected png, got ${info.ext}`)
+    })
+
+    await check('formats that are not images, or not allowed, are refused', async () => {
+      for (const [body, type] of [
+        [Buffer.from('just some text'), 'image/png'],
+        [Buffer.from('BM\0\0\0\0\0\0\0\0\0\0'), 'image/bmp'],
+        [png, 'application/pdf'],
+        [Buffer.from('%PDF-1.4 hello'), 'image/png'],
+        [Buffer.from('<html><script>alert(1)</script></html>'), 'image/svg+xml'],
+        [Buffer.alloc(0), 'image/png'],
+      ]) {
+        const res = await upload(body, type)
+        assert(res.status === 415 || res.status === 400, `expected 4xx for ${type}, got ${res.status}`)
+      }
+    })
+
+    await check('a truncated image with valid magic bytes is refused', async () => {
+      const res = await upload(png.subarray(0, 40), 'image/png')
+      assert(res.status === 400, `expected 400, got ${res.status}`)
+    })
+
+    await check('an upload over the byte limit is refused with 413', async () => {
+      const big = Buffer.alloc(10 * 1024 * 1024 + 1)
+      png.copy(big)
+      const res = await rawRequest(base, 'POST', '/api/macro-image', {
+        headers: { 'content-type': 'image/png', 'content-length': String(big.length) },
+        body: big,
+      }).catch((err) => ({ status: 0, error: err }))
+      assert(res.status === 413, `expected 413, got ${res.status} ${res.error?.message ?? ''}`)
+    })
+
+    await check('an image with too many pixels is refused', async () => {
+      const huge = await sharp({ create: { width: 8000, height: 6000, channels: 3, background: '#fff' } })
+        .png({ compressionLevel: 9 })
+        .toBuffer()
+      assert(huge.length < 10 * 1024 * 1024, 'fixture itself is too large')
+      const res = await upload(huge, 'image/png')
+      assert(res.status === 413 || res.status === 400, `expected refusal, got ${res.status}`)
+    })
+
+    let svgInfo
+    await check('an SVG is sanitised: scripts, handlers, foreignObject and external references are gone', async () => {
+      svgInfo = await ok(await upload(evilSvg, 'image/svg+xml'))
+      assert(svgInfo.ext === 'svg' && svgInfo.width === 100 && svgInfo.height === 50, JSON.stringify(svgInfo))
+      const stored = fs.readFileSync(path.join(dir, 'macro-images', 'originals', `${svgInfo.id}.svg`), 'utf-8')
+      for (const bad of [
+        /<script/i,
+        /onload/i,
+        /onclick/i,
+        /foreignObject/i,
+        /javascript:/i,
+        /evil\.example/i,
+        /@import/i,
+      ]) {
+        assert(!bad.test(stored), `still contains ${bad}: ${stored}`)
+      }
+      assert(/viewBox="0 0 100 50"/.test(stored), `viewBox lost: ${stored}`)
+      assert(/<(rect|path)/.test(stored), 'the drawing itself was removed')
+    })
+
+    await check('a baked SVG stays a vector, cropped by viewBox, with safe headers', async () => {
+      const b = await ok(await bake(svgInfo.id, { rows: 1, columns: 1 }, { x: 0.5, y: 0.5, zoom: 2 }))
+      assert(b.ext === 'svg', `expected svg, got ${b.ext}`)
+      const res = await fetch(bakedUrl(svgInfo.id, b))
+      const text = await res.text()
+      assert(res.status === 200 && res.headers.get('content-type') === 'image/svg+xml', 'wrong response')
+      assert(/viewBox="37\.5 12\.5 25 25"/.test(text), `unexpected viewBox: ${text}`)
+      assert(!/<script|onload/i.test(text), 'script in baked SVG')
+      assert(res.headers.get('content-security-policy')?.includes("default-src 'none'"), 'missing CSP')
+      assert(res.headers.get('content-security-policy')?.includes('sandbox'), 'CSP is not sandboxed')
+      assert(res.headers.get('x-content-type-options') === 'nosniff', 'missing nosniff')
+    })
+
+    let b11
+    await check('a raster bakes to WebP with immutable caching, CORS and nosniff', async () => {
+      b11 = await ok(await bake(pngInfo.id, { rows: 1, columns: 1 }, centre))
+      assert(b11.ext === 'webp' && /^[0-9a-f]{8,64}$/.test(b11.rev), JSON.stringify(b11))
+      const res = await fetch(bakedUrl(pngInfo.id, b11))
+      const bytes = Buffer.from(await res.arrayBuffer())
+      assert(res.status === 200 && res.headers.get('content-type') === 'image/webp', 'wrong type')
+      assert(
+        res.headers.get('cache-control') === 'public, max-age=31536000, immutable',
+        res.headers.get('cache-control'),
+      )
+      assert(res.headers.get('access-control-allow-origin') === '*', 'no CORS')
+      assert(res.headers.get('x-content-type-options') === 'nosniff', 'no nosniff')
+      const meta = await sharp(bytes).metadata()
+      assert(meta.format === 'webp' && meta.hasAlpha, 'not a WebP with alpha')
+      const head = await fetch(bakedUrl(pngInfo.id, b11), { method: 'HEAD' })
+      assert(head.status === 200 && (await head.text()) === '', 'HEAD should answer with no body')
+    })
+
+    await check('the baked aspect always matches the span', async () => {
+      for (const span of [
+        { rows: 1, columns: 2 },
+        { rows: 2, columns: 3 },
+        { rows: 3, columns: 1 },
+        { rows: 3, columns: 3 },
+      ]) {
+        const b = await ok(await bake(pngInfo.id, span, { x: 0.3, y: 0.7, zoom: 1.5 }))
+        const meta = await sharp(Buffer.from(await (await fetch(bakedUrl(pngInfo.id, b))).arrayBuffer())).metadata()
+        assert(
+          meta.width * span.rows === meta.height * span.columns,
+          `${span.rows}x${span.columns} baked to ${meta.width}x${meta.height}`,
+        )
+        assert(Math.max(meta.width, meta.height) <= 512, 'baked larger than the longest edge limit')
+      }
+    })
+
+    await check('a different crop gives a different rev, the same crop the same one', async () => {
+      const again = await ok(await bake(pngInfo.id, { rows: 1, columns: 1 }, centre))
+      assert(again.rev === b11.rev, 'the same crop changed rev')
+      const zoomed = await ok(await bake(pngInfo.id, { rows: 1, columns: 1 }, { x: 0.5, y: 0.5, zoom: 2 }))
+      const moved = await ok(await bake(pngInfo.id, { rows: 1, columns: 1 }, { x: 0.1, y: 0.5, zoom: 1 }))
+      const wide = await ok(await bake(pngInfo.id, { rows: 1, columns: 2 }, centre))
+      assert(
+        new Set([b11.rev, zoomed.rev, moved.rev, wide.rev]).size === 4,
+        `crops collided: ${[b11.rev, zoomed.rev, moved.rev, wide.rev]}`,
+      )
+    })
+
+    await check('bad spans, crops and ids are refused', async () => {
+      assert((await bake(pngInfo.id, { rows: 0, columns: 2 }, centre)).status === 400, 'span with 0 rows accepted')
+      assert((await bake(pngInfo.id, { rows: 1.5, columns: 2 }, centre)).status === 400, 'fractional span accepted')
+      assert((await bake(pngInfo.id, { rows: 65, columns: 1 }, centre)).status === 400, 'oversized span accepted')
+      assert((await bake(pngInfo.id, { rows: 1, columns: 1 }, { x: 'a', y: 0, zoom: 1 })).status === 400, 'string crop')
+      assert((await bake(pngInfo.id, { rows: 1, columns: 1 }, { x: 0, y: 0, zoom: null })).status === 400, 'null zoom')
+      assert(
+        (await bake('00000000-0000-4000-8000-000000000000', { rows: 1, columns: 1 }, centre)).status === 404,
+        'unknown image',
+      )
+      assert((await bake('not-an-id', { rows: 1, columns: 1 }, centre)).status === 404, 'bad id')
+      const wild = await ok(await bake(pngInfo.id, { rows: 1, columns: 1 }, { x: 9, y: -4, zoom: 0.1 }))
+      assert(wild.rev, 'out of range numbers should be clamped, not refused')
+    })
+
+    await check('an animated GIF stays animated when baked (multi-page WebP, right shape)', async () => {
+      const info = await ok(await upload(gif, 'image/gif'))
+      assert(
+        info.ext === 'gif' && info.animated === true && info.width === 40 && info.height === 30,
+        JSON.stringify(info),
+      )
+      const b = await ok(await bake(info.id, { rows: 1, columns: 2 }, centre))
+      assert(b.ext === 'webp', 'animated GIF should bake to WebP')
+      const bytes = Buffer.from(await (await fetch(bakedUrl(info.id, b))).arrayBuffer())
+      const meta = await sharp(bytes, { animated: true }).metadata()
+      assert(meta.pages === frames, `expected ${frames} frames, got ${meta.pages}`)
+      assert(meta.width === meta.pageHeight * 2, `frame is ${meta.width}x${meta.pageHeight}, not 2:1`)
+      assert(meta.delay?.length === frames, 'frame delays were lost')
+    })
+
+    await check('a GIF with too many frames is refused', async () => {
+      const many = await sharp(
+        Buffer.from(Array.from({ length: 8 * 8 * 4 * 201 }, (_, i) => (i * 7 + (i >> 8) * 31) % 256)),
+        {
+          raw: { width: 8, height: 8 * 201, channels: 4, pageHeight: 8 },
+        },
+      )
+        .gif({ loop: 0, delay: Array(201).fill(10) })
+        .toBuffer()
+      const res = await upload(many, 'image/gif')
+      assert(res.status === 413, `expected 413, got ${res.status} ${await res.text()}`)
+    })
+
+    await check('originals are served to the editor with safe headers', async () => {
+      const res = await fetch(`${base}${'/macro-images/originals/' + svgInfo.id}`)
+      assert(res.status === 200 && res.headers.get('content-type') === 'image/svg+xml', `got ${res.status}`)
+      assert(res.headers.get('x-content-type-options') === 'nosniff', 'no nosniff')
+      assert(res.headers.get('content-security-policy')?.includes('sandbox'), 'no CSP')
+      assert(res.headers.get('access-control-allow-origin') === '*', 'no CORS')
+      const png2 = await fetch(`${base}/macro-images/originals/${pngInfo.id}`)
+      assert(png2.headers.get('content-type') === 'image/png', 'wrong type for png original')
+    })
+
+    await check('the editor routes answer a cross-origin preflight', async () => {
+      const res = await fetch(`${base}/api/macro-image`, {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'http://localhost:4323',
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type,x-pairing-token',
+        },
+      })
+      assert(res.status === 204, `expected 204, got ${res.status}`)
+      const allowed = res.headers.get('access-control-allow-headers') ?? ''
+      assert(/content-type/i.test(allowed) && /x-pairing-token/i.test(allowed), `headers not allowed: ${allowed}`)
+      assert(res.headers.get('access-control-allow-origin') === '*', 'no allow-origin')
+      assert(/POST/.test(res.headers.get('access-control-allow-methods') ?? ''), 'POST not allowed')
+    })
+
+    await check('a web page from another site cannot use the loopback exemption', async () => {
+      const res = await fetch(`${base}/api/macro-image`, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png', origin: 'https://evil.example' },
+        body: png,
+      })
+      assert(res.status === 401, `expected 401, got ${res.status}`)
+      const withToken = await fetch(`${base}/api/macro-image`, {
+        method: 'POST',
+        headers: { 'content-type': 'image/png', origin: 'https://evil.example', 'x-pairing-token': token },
+        body: png,
+      })
+      assert(withToken.status === 200, 'a token should still work')
+    })
+
+    await check('path traversal and malformed names never reach the file system', async () => {
+      const paths = [
+        '/macro-images/baked/../../pairing.json',
+        '/macro-images/baked/..%2f..%2fpairing.json',
+        '/macro-images/baked/%2e%2e/%2e%2e/state.json',
+        `/macro-images/baked/${pngInfo.id}-${b11.rev}.webp/../../../pairing.json`,
+        `/macro-images/baked/${pngInfo.id}-${b11.rev}.png`,
+        `/macro-images/baked/${pngInfo.id}.webp`,
+        '/macro-images/baked/',
+        '/macro-images/originals/..%2fbaked',
+        '/macro-images/originals/../../pairing.json',
+        `/macro-images/originals/${pngInfo.id}.png`,
+        '/macro-images/originals/',
+        '/macro-images/nothing',
+        '/macro-images/',
+      ]
+      for (const p of paths) {
+        const res = await rawRequest(base, 'GET', p)
+        assert([400, 403, 404].includes(res.status), `${p} -> ${res.status}`)
+        assert(!res.body.toString().includes(token), `${p} leaked the token`)
+      }
+      const res = await rawRequest(base, 'POST', '/api/macro-image/..%2f..%2fx/bake', {
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      assert(res.status === 404, `bake with a traversal id -> ${res.status}`)
+    })
+
+    if (!remote) {
+      skip('devices other than this computer need the token', 'no non-loopback IPv4 address on this machine')
+    } else {
+      await check('another device without the token cannot upload, bake or read originals', async () => {
+        assert((await upload(png, 'image/png', remote)).status === 401, 'upload allowed')
+        assert((await bake(pngInfo.id, { rows: 1, columns: 1 }, centre, remote)).status === 401, 'bake allowed')
+        assert((await fetch(`${remote}/macro-images/originals/${pngInfo.id}`)).status === 401, 'original served')
+        assert(
+          (await fetch(`${remote}/macro-images/originals/${pngInfo.id}?token=wrong`)).status === 401,
+          'wrong token accepted',
+        )
+      })
+
+      await check('another device with the token can, by query or header', async () => {
+        const viaQuery = await ok(await upload(png, 'image/png', remote, `?token=${token}`))
+        assert(viaQuery.ext === 'png', 'upload by query token failed')
+        const res = await fetch(`${remote}/api/macro-image/${viaQuery.id}/bake`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-pairing-token': token },
+          body: JSON.stringify({ span: { rows: 1, columns: 1 }, crop: centre }),
+        })
+        assert((await ok(res)).ext === 'webp', 'bake by header token failed')
+        const original = await fetch(`${remote}/macro-images/originals/${viaQuery.id}`, {
+          headers: { 'x-pairing-token': token },
+        })
+        assert(original.status === 200, `original with token: ${original.status}`)
+      })
+
+      await check('baked images are open to every device', async () => {
+        const res = await fetch(bakedUrl(pngInfo.id, b11, remote))
+        assert(res.status === 200, `expected 200, got ${res.status}`)
+      })
+    }
+
+    await check('unused images are cleaned up, used ones and their current bake kept', async () => {
+      const used = await ok(await upload(png, 'image/png'))
+      const old = await ok(await bake(used.id, { rows: 1, columns: 1 }, centre))
+      const current = await ok(await bake(used.id, { rows: 1, columns: 1 }, { x: 0.2, y: 0.5, zoom: 1 }))
+      const out = await new Promise((resolve, reject) => {
+        const gc = spawn('node_modules/.bin/tsx', ['master-server/image-fixture.ts'], {
+          env: {
+            ...env,
+            MODE: 'gc',
+            IMAGE_GC_GRACE_MS: '0',
+            KEEP_IDS: used.id,
+            KEEP_BAKES: `${used.id}-${current.rev}`,
+          },
+          stdio: ['ignore', 'pipe', 'inherit'],
+        })
+        let text = ''
+        gc.stdout.on('data', (c) => (text += c))
+        gc.on('error', reject)
+        gc.on('exit', () => resolve(text))
+      })
+      const left = JSON.parse(out.trim().split('\n').pop())
+      assert(left.originals.length === 1 && left.originals[0].startsWith(used.id), `originals left: ${left.originals}`)
+      assert(left.baked.length === 1 && left.baked[0] === `${used.id}-${current.rev}.webp`, `baked left: ${left.baked}`)
+      assert(old.rev !== current.rev, 'fixture bakes should differ')
+    })
+
+    await check('files younger than the grace period survive cleanup', async () => {
+      const fresh = await ok(await upload(png, 'image/png'))
+      const gc = spawn('node_modules/.bin/tsx', ['master-server/image-fixture.ts'], {
+        env: { ...env, MODE: 'gc', IMAGE_GC_GRACE_MS: String(10 * 60 * 1000) },
+        stdio: ['ignore', 'pipe', 'inherit'],
+      })
+      let text = ''
+      gc.stdout.on('data', (c) => (text += c))
+      await new Promise((resolve) => gc.on('exit', resolve))
+      assert(
+        JSON.parse(text.trim().split('\n').pop()).originals.some((n) => n.startsWith(fresh.id)),
+        'fresh upload deleted',
+      )
+    })
+  } finally {
+    child.kill()
+    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(staticDir, { recursive: true, force: true })
+  }
 }
 
 /* -------------------------------------------------------------------- report */

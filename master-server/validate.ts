@@ -5,6 +5,8 @@ import type {
   ProtocolError,
   StateCommand,
 } from '../shared/protocol'
+import { isImageSpan } from '../shared/types/macro'
+import { BAKED_EXTS, IMAGE_ID_RE, IMAGE_REV_RE } from './image-ids'
 
 /**
  * Turns a raw socket frame into a typed message, or says why it can't.
@@ -29,13 +31,39 @@ const isPos = (v: unknown): boolean => isObj(v) && typeof v.row === 'number' && 
 const isSpan = (v: unknown): boolean =>
   isObj(v) && Number.isInteger(v.rows) && Number.isInteger(v.columns) && Number(v.rows) >= 1 && Number(v.columns) >= 1
 
+/** A custom image icon: its id, and how it is baked and shown. Other icon sources are left alone. */
+const isImageIcon = (v: unknown): boolean => {
+  if (!isObj(v) || v.source !== 'IMAGE') return true
+  const image = v.image
+  return (
+    isStr(v.value) &&
+    IMAGE_ID_RE.test(v.value) &&
+    isObj(image) &&
+    isObj(image.span) &&
+    isImageSpan(image.span) &&
+    isObj(image.crop) &&
+    ['x', 'y', 'zoom'].every((k) => Number.isFinite((image.crop as Record<string, unknown>)[k])) &&
+    (image.mode === 'inset' || image.mode === 'fill') &&
+    isStr(image.rev) &&
+    IMAGE_REV_RE.test(image.rev) &&
+    (BAKED_EXTS as readonly unknown[]).includes(image.ext)
+  )
+}
+
+const hasValidImages = (v: Record<string, unknown>): boolean =>
+  isImageIcon(v.icon) &&
+  (v.stateAppearance === undefined ||
+    (isObj(v.stateAppearance) &&
+      Object.values(v.stateAppearance).every((a) => !isObj(a) || a.icon === undefined || isImageIcon(a.icon))))
+
 /** A macro/screen is checked for the fields the store actually dereferences. */
 const isMacro = (v: unknown): boolean =>
   isObj(v) &&
   isStr(v.id) &&
   (v.nodeId === undefined || isStr(v.nodeId)) &&
   (v.face === undefined || isStr(v.face)) &&
-  (v.faceSettings === undefined || isObj(v.faceSettings))
+  (v.faceSettings === undefined || isObj(v.faceSettings)) &&
+  hasValidImages(v)
 const isScreen = (v: unknown): boolean =>
   isObj(v) &&
   isStr(v.id) &&

@@ -498,6 +498,56 @@ and passes ST-03, PA-06 and one action end to end.
 
 ---
 
+## J. Custom macro images (`IM`)
+
+**IM-01 — Upload each supported format.** In the macro editor, pick a PNG, JPEG, WebP, GIF and SVG
+file in turn. Each uploads, shows a preview in the crop dialog, and can be saved to a macro. The
+macro shows the image on the editor screen and on a connected remote.
+
+**IM-02 — Rejected file type.** Pick a file that is not one of the five formats (for example a
+`.bmp` or a `.txt` renamed to `.png`). The dialog shows an error, nothing is added to the macro,
+and the macro keeps its previous look.
+
+**IM-03 — Oversize file.** Pick an image larger than 10 MB. It is rejected with an error that
+names the size limit, and the macro is unchanged.
+
+**IM-04 — Animated GIF animates on the remote.** Use an animated GIF. The remote shows it moving
+at its original speed. The editor preview also animates.
+
+**IM-05 — SVG scripts are stripped.** Use an SVG that contains a `<script>` element and an
+`onload` attribute. It shows as a plain graphic in the editor and on the remote, and the script
+does not run (no alert, no network request, no console output from it).
+
+**IM-06 — Crop per span.** For several macro sizes (1x1, 1x2, 2x2, 3x1 and so on), crop and
+zoom the same image. The macro on the remote shows the same framing that the crop dialog showed for
+that size. Changing the size and re-cropping updates the framing.
+
+**IM-07 — Inset vs fill.** With **inset**, the whole cropped image sits inside the macro with
+padding around it. With **fill**, the image covers the macro edge to edge. In both modes the image
+is clipped to the macro's rounded corners.
+
+**IM-08 — Transparent pixels show the background colour.** Use a PNG or SVG with transparent
+areas and set a macro background colour. The transparent areas show that colour on the editor and
+on the remote.
+
+**IM-09 — Per-state images.** Give a macro one image for its normal state and another for its
+alternate state, then use its state switch. The remote shows the image that matches the current
+state, and switching back shows the first image again.
+
+**IM-10 — Image survives a restart.** Set images on at least two macros, quit the app fully and
+start it again. The editor and the remote show the same images as before, with no re-upload.
+
+**IM-11 — Remote cannot fetch originals.** From a paired remote, open the original file address
+for a macro image (`/macro-images/originals/<id>`). It is refused. The baked file address for the
+same image (`/macro-images/baked/...`) loads without a credential prompt, so the remote's
+own display works.
+
+**IM-12 — Unused images are removed after the grace period.** Upload an image, save it to a macro,
+then remove it from the macro. The image is still on disk right after the change. After the grace
+period has passed and the app has run its cleanup, the original and baked files are gone.
+
+---
+
 ## Appendix: quirk index
 
 Current behavior that is surprising, recorded so the refactor preserves it knowingly. Each needs a

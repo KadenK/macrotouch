@@ -15,6 +15,9 @@ import IconFace from '~/components/macro/faces/IconFace.vue'
 import ValueFace from '~/components/macro/faces/ValueFace.vue'
 import PluginElement from '~/components/macro/PluginElement.vue'
 
+/** For plugin faces: the URL to draw when `macro.icon` is a custom image (undefined otherwise). */
+export { macroImageSrc } from '~/composables/useMacroImage'
+
 /**
  * Faces.
  *

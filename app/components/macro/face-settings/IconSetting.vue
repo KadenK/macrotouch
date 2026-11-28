@@ -5,6 +5,7 @@
       v-model="icon"
       :icon-color="colorToHex(base.iconColor)"
       :background-color="colorToHex(base.backgroundColor)"
+      :span="macro.span"
       with-button
     />
   </div>

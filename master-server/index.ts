@@ -5,6 +5,7 @@ import { createActionServerLauncher } from './action-server-launcher'
 import { startGateway } from './gateway'
 import { startHttpServer } from './http'
 import { PluginRegistry } from './plugin-registry'
+import { MacroImages } from './macro-images'
 import { resolveDataRoot } from './state-file'
 import { PairingToken } from './pairing'
 
@@ -29,7 +30,8 @@ const staticDir = process.env.MACROTOUCH_STATIC_DIR || path.join(here, '..', '.o
 const pairing = new PairingToken()
 
 const plugins = new PluginRegistry(resolveDataRoot())
-const http = startHttpServer(httpPort, staticDir, pairing, plugins)
+const images = new MacroImages(resolveDataRoot())
+const http = startHttpServer(httpPort, staticDir, pairing, plugins, images)
 http.on('error', (err: NodeJS.ErrnoException) => {
   console.error(`[HTTP] cannot listen on port ${httpPort}:`, err.message)
   process.exit(1)
@@ -49,6 +51,7 @@ const stop = async () => {
 const gateway = startGateway(wsPort, {
   pairing,
   plugins,
+  images,
   onQuit: () => {
     console.log('Quit requested, shutting down')
     void stop()
