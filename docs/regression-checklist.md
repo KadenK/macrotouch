@@ -386,12 +386,14 @@ separately and mark untested platforms as **not verified** rather than leaving t
 | AC-02 | Launch App — URL | `open` | `start ""` | `xdg-open` |
 | AC-03 | Launch App — application | `open -a "<path>.app"` | `start "" "<path>"` | spawn binary directly |
 | AC-04 | Send Notification | `terminal-notifier` | SnoreToast | `notify-send` |
-| AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys` | `xdotool`, falling back to `ydotool` |
+| AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys`; `keybd_event` when the combo has the Windows key | `xdotool`, falling back to `ydotool` |
 | AC-06 | Type Text | `osascript` keystroke | PowerShell `SendKeys` | `xdotool type`, falling back to `ydotool type` |
-| AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell `SendKeys` / `nircmd` | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
+| AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell media keys (`SendKeys`), nothing to install | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
 
 **AC-01 — Shell Command.** A command with an observable side effect (e.g. writing a file) runs and
-produces that effect. An empty or missing command logs a warning and does nothing.
+produces that effect. An empty or missing command logs a warning and does nothing. Include a quoted
+argument, such as a file name with a space (`type nul > "mt check.txt"` on Windows,
+`touch "mt check.txt"` elsewhere): on Windows, quoted commands used to fail.
 ⚠ The command string is passed to the shell unquoted and unescaped — shell metacharacters in the
 field are interpreted. That is current behavior and the field is trusted input.
 
@@ -410,7 +412,8 @@ plain `npm run dev`). If the OS refuses it, the failure is logged as an error.
 **AC-05 — Key Combo.** Capture a combo (e.g. `cmd+c` / `ctrl+c`), trigger it, and confirm the
 receiving app saw the keystroke. Modifier aliases (`ctrl`/`control`, `cmd`/`command`/`meta`/`win`,
 `alt`/`option`) all resolve. Named keys (`enter`, `tab`, `space`, `backspace`, `delete`, `escape`,
-arrows) work as well as plain characters.
+arrows) work as well as plain characters. On Windows, also try a Windows-key combo such as `win+e`
+(opens File Explorer): it must press the Windows key, not type `#e`.
 ⚠ On macOS this requires Accessibility permission for the host app; without it the combo silently
 does nothing.
 
@@ -419,7 +422,8 @@ characters that are special to the underlying mechanism (`{`, `}`, `^`, `%`, `~`
 Same Accessibility caveat as AC-05.
 
 **AC-07 — Multimedia Control.** Each of `PlayPause`, `NextTrack`, `PreviousTrack`, `VolumeUp`,
-`VolumeDown`, `Mute` has its effect. Volume steps by 5% per trigger.
+`VolumeDown`, `Mute` has its effect. Volume steps by 5% per trigger on macOS and Linux. On Windows
+it presses the system volume key, so it steps by the OS amount (2%) and shows the volume overlay.
 ⚠ macOS `Mute` only mutes — repeating it does not unmute, unlike every other platform where mute
 toggles.
 ⚠ macOS prefers Music, then Spotify, and only sends media keys if neither is running, so the

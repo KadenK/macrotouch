@@ -208,7 +208,6 @@ const buildWindowsSequence = (modifiers: string[], key: string) => {
       if (modifier === 'control') return '^'
       if (modifier === 'shift') return '+'
       if (modifier === 'option') return '%'
-      if (modifier === 'command') return '#'
       return ''
     })
     .join('')
@@ -223,6 +222,63 @@ const buildWindowsSequence = (modifiers: string[], key: string) => {
   }
 
   return `${modifierTokens}{${key.toUpperCase()}}`
+}
+
+/** Windows virtual-key codes. */
+const windowsVirtualKeys: Record<string, number> = {
+  control: 0x11,
+  shift: 0x10,
+  option: 0x12,
+  command: 0x5b,
+  enter: 0x0d,
+  return: 0x0d,
+  tab: 0x09,
+  space: 0x20,
+  backspace: 0x08,
+  delete: 0x2e,
+  escape: 0x1b,
+  esc: 0x1b,
+  left: 0x25,
+  up: 0x26,
+  right: 0x27,
+  down: 0x28,
+  home: 0x24,
+  end: 0x23,
+  pageup: 0x21,
+  pagedown: 0x22,
+  insert: 0x2d,
+}
+
+/** Keys needing the extended flag. */
+const windowsExtendedKeys = new Set([0x5b, 0x2e, 0x25, 0x26, 0x27, 0x28, 0x24, 0x23, 0x21, 0x22, 0x2d])
+
+const windowsKeyCode = (key: string): number | undefined => {
+  if (windowsVirtualKeys[key] !== undefined) return windowsVirtualKeys[key]
+  if (/^[a-z0-9]$/.test(key)) return key.toUpperCase().charCodeAt(0)
+  const fn = /^f([1-9]|1[0-2])$/.exec(key)
+  return fn ? 0x6f + Number(fn[1]) : undefined
+}
+
+/** SendKeys has no Windows key. */
+const buildWindowsKeyEvents = (modifiers: string[], key: string): string => {
+  const mods = [...new Set(modifiers)].map((m) => windowsVirtualKeys[m]).filter((code) => code !== undefined)
+  const code = windowsKeyCode(key)
+  const keyExpr =
+    code !== undefined
+      ? String(code)
+      : key.length === 1
+        ? `([MT.Keys]::VkKeyScan([char]${key.charCodeAt(0)}) -band 0xFF)`
+        : undefined
+  if (keyExpr === undefined) throw new Error(`Unknown key: ${key}`)
+  return [
+    `Add-Type -Namespace MT -Name Keys -MemberDefinition '[DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, System.UIntPtr e); [DllImport("user32.dll")] public static extern short VkKeyScan(char c); [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint c, uint t);'`,
+    `$ext = @(${[...windowsExtendedKeys].join(',')})`,
+    // Shell hotkeys ignore instant presses.
+    `function Send($k, $up) { $f = 0; if ($ext -contains $k) { $f = 1 }; if ($up) { $f = $f -bor 2 }; [MT.Keys]::keybd_event([byte]$k, [byte][MT.Keys]::MapVirtualKey($k, 0), $f, [UIntPtr]::Zero); Start-Sleep -Milliseconds 30 }`,
+    `$mods = @(${mods.join(',')}); $key = ${keyExpr}`,
+    `foreach ($m in $mods) { Send $m $false }; Send $key $false; Send $key $true`,
+    `[array]::Reverse($mods); foreach ($m in $mods) { Send $m $true }`,
+  ].join('; ')
 }
 
 const buildLinuxSequence = (modifiers: string[], key: string) => {
@@ -270,6 +326,10 @@ const action = defineAction({
     },
     win32: async (parameters, ctx) => {
       const { modifiers, key } = parseKeys(parameters)
+      if (modifiers.includes('command')) {
+        await ctx.spawn('powershell', ['-NoProfile', '-Command', buildWindowsKeyEvents(modifiers, key)])
+        return
+      }
       const sequence = buildWindowsSequence(modifiers, key)
       const command = `[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [System.Windows.Forms.SendKeys]::SendWait('${sequence.replace(/'/g, "''")}')`
       await ctx.spawn('powershell', ['-NoProfile', '-Command', command])

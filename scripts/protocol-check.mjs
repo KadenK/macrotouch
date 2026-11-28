@@ -821,7 +821,8 @@ async function main() {
         server.close(() => resolve(port))
       })
     })
-    const child = spawn('node_modules/.bin/tsx', ['master-server/protocol-fixture.ts'], {
+    // Windows can't spawn .bin shims.
+    const child = spawn(process.execPath, ['--import', 'tsx', 'master-server/protocol-fixture.ts'], {
       env: { ...process.env, MACROTOUCH_DATA_DIR: dir, WS_PORT: String(port) },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -997,12 +998,14 @@ async function main() {
   await check('macro-trigger runs the action in the action server', async () => {
     // The server under test launches its own local action server, which gets
     // the trigger. The harness shares its machine, so the effect is a file.
-    const marker = path.join(os.tmpdir(), `mt-protocol-check-${Date.now()}`)
+    // The space forces a quoted argument.
+    const marker = path.join(os.tmpdir(), `mt protocol-check-${Date.now()}`)
     const { c: editor } = await connected('editor')
     const macro = {
       ...makeMacro('Harness shell command'),
       actionId: 'core-system/shellCommand',
-      parameters: { command: `touch "${marker}"` },
+      // cmd.exe has no `touch`.
+      parameters: { command: process.platform === 'win32' ? `type nul > "${marker}"` : `touch "${marker}"` },
     }
     editor.send({ type: 'upsert-macro', macro })
     await editor.next(isPatch)
