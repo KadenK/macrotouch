@@ -393,17 +393,25 @@ await check('SE-05/SE-02', 'rows/columns clamp to 1..20 on save, then it navigat
   const cols = await win.locator('.grid-input').nth(1).inputValue()
   assert(rows === '20' && cols === '1', `clamped to ${rows}x${cols}, expected 20x1`)
 })
-await check('SE-10', 'the decorative toggles do not persist', async () => {
-  // Addressed by label. Start on boot is deliberately not exercised: it writes a
-  // real OS login item, and this run does not isolate Electron's userData.
-  const box = () => win.locator('.setting-row', { hasText: 'Button haptics' }).locator('input[type=checkbox]')
-  await win.locator('.setting-row', { hasText: 'Button haptics' }).locator('.switch').click()
-  assert(await box().isChecked(), 'clicking the switch did not tick the box')
-  await win.locator('.save-btn').click()
-  await until(async () => win.url().endsWith('/home'), 'save did not navigate')
-  await win.locator('.input-button', { hasText: 'Settings' }).click()
+await check('SE-13', 'Button haptics persists', async () => {
+  // Settings autosave; reload to verify.
+  const openRemote = async () => {
+    await win.locator('.sidebar-item-button', { hasText: 'Remote' }).click()
+    await win.waitForSelector('.setting-row')
+  }
+  const row = () => win.locator('.setting-row', { hasText: 'Button haptics' })
+  const box = () => row().locator('input[type=checkbox]')
+  await openRemote()
+  const before = await box().isChecked()
+  await row().locator('.switch').click()
+  await until(async () => (await box().isChecked()) === !before, 'haptics toggle did not flip')
+  await win.reload()
   await win.waitForSelector('.settings-page')
-  assert(!(await box().isChecked()), 'Button haptics persisted — it is documented as inert')
+  await openRemote()
+  await until(async () => (await box().isChecked()) === !before, 'Button haptics did not persist')
+  // Restore original value.
+  await row().locator('.switch').click()
+  await until(async () => (await box().isChecked()) === before, 'haptics restore did not flip')
 })
 await check('SE-08', 'Swipe to change screens persists', async () => {
   // Addressed by label, not position: the tray work inserted a row into General

@@ -56,6 +56,11 @@ model {
       technology 'JSON file'
     }
 
+    macroImages = datastore 'Macro Images' {
+      description 'Uploaded macro images: originals kept for the editor, and baked files that remotes load; unused ones are removed after a grace period'
+      technology 'JSON and image files in the data folder'
+    }
+
     actionSecret = datastore 'Action Server Secret' {
       description 'The secret that proves this action server to the master'
       technology 'file, mode 0600'
@@ -94,11 +99,11 @@ views "2. Containers" {
     include *, user, os
     // Summary titles for edges that roll up from Level 3 as [...]
     include macrotouch.editor -> macrotouch.master with {
-      title 'pairs, loads pages and plugin faces, syncs edits, installs plugins'
+      title 'pairs, loads pages and plugin faces, syncs edits, installs plugins, uploads and crops macro images'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.controller -> macrotouch.master with {
-      title 'pairs, loads pages and plugin faces, sends taps, gets live state'
+      title 'pairs, loads pages and plugin faces, sends taps, gets live state, loads macro images'
       technology 'HTTP, WebSocket'
     }
     include macrotouch.action -> macrotouch.master with {

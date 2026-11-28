@@ -84,19 +84,25 @@ export function createRunContext(ctx: PluginContext, signal: AbortSignal): Plugi
     child.once('close', () => signal.removeEventListener('abort', kill))
     if (signal.aborted) kill()
   }
+  const run = (command: string, args: string[], windowsVerbatimArguments = false) =>
+    new Promise<string>((resolve, reject) => {
+      if (signal.aborted) return reject(new Error('Action timed out'))
+      const child = spawnChild(command, args, {
+        shell: false,
+        detached: process.platform !== 'win32',
+        windowsVerbatimArguments,
+      })
+      track(child)
+      collectOutput(child, resolve, reject)
+    })
   const runContext: PluginContext = {
     ...ctx,
-    exec: (command) => runContext.spawn(getDefaultShell(), [process.platform === 'win32' ? '/c' : '-c', command]),
-    spawn: (command, args) =>
-      new Promise((resolve, reject) => {
-        if (signal.aborted) return reject(new Error('Action timed out'))
-        const child = spawnChild(command, args, {
-          shell: false,
-          detached: process.platform !== 'win32',
-        })
-        track(child)
-        collectOutput(child, resolve, reject)
-      }),
+    // cmd.exe ignores Node's quoting.
+    exec: (command) =>
+      process.platform === 'win32'
+        ? run(getDefaultShell(), ['/d', '/s', '/c', `"${command}"`], true)
+        : run(getDefaultShell(), ['-c', command]),
+    spawn: (command, args) => run(command, args),
   }
   return runContext
 }

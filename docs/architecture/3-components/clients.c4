@@ -51,6 +51,16 @@ model {
       technology 'pages/editor/devices.vue'
     }
 
+    imageCrop = ui 'ImageCropModal' {
+      description 'Dialog for choosing a macro image, then cropping and zooming it for the macro\'s shape'
+      technology 'components/macro/ImageCropModal.vue'
+    }
+
+    macroImages = module 'MacroImages' {
+      description 'Uploads a macro image, asks the master to bake a crop of it, and loads originals for the crop dialog'
+      technology 'composables/useMacroImage.ts'
+    }
+
     ws -[event]-> store 'message'
     ws -[event]-> start 'claimed, pair-choices, pair-result, error'
     ws -[event]-> pair 'pair-prompt, pair-challenge, pairing-mode'
@@ -63,6 +73,8 @@ model {
     macroEditor -[call]-> store 'read, upsertMacro()'
     macroEditor -[call]-> faces 'useMacroFace(face, stateKind), faceSettingsFor(face)'
     macroEditor -[call]-> ws 'send(list-options)'
+    macroEditor -[call]-> imageCrop 'open(file)'
+    imageCrop -[call]-> macroImages 'upload(file), bake(id, span, crop)'
     screens -[call]-> faces 'display(macro)'
     pluginsPage -[call]-> store 'read plugins and catalogs, updatePlugin()'
     pluginsPage -[call]-> ws 'send(install-plugin, plugin-secrets, test-plugin)'
@@ -120,6 +132,15 @@ model {
     technology 'IPC (preload)'
   }
   macrotouch.editor.pair -[message]-> macrotouch.master.http 'GET /api/ip' {
+    technology 'HTTP'
+  }
+  macrotouch.editor.macroImages -[message]-> macrotouch.master.http 'POST /api/macro-image, POST bake, GET originals' {
+    technology 'HTTP'
+  }
+  macrotouch.editor.screens -[message]-> macrotouch.master.http 'GET baked macro images' {
+    technology 'HTTP'
+  }
+  macrotouch.controller.cell -[message]-> macrotouch.master.http 'GET baked macro images' {
     technology 'HTTP'
   }
   macrotouch.editor.faces -[message]-> macrotouch.master.http 'GET plugin face code' {

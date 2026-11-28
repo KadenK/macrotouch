@@ -1,0 +1,40 @@
+// Flow: set a custom image on a macro, then show it on a remote
+views "4. Flows" {
+  dynamic view flow-macro-image {
+    variant sequence
+    title 'Set a Macro Image'
+
+    user -> macrotouch.editor.macroEditor 'picks an image file'
+    macrotouch.editor.macroEditor -> macrotouch.editor.imageCrop 'open(file)'
+    macrotouch.editor.imageCrop -> macrotouch.editor.macroImages 'upload(file)'
+    macrotouch.editor.macroImages -> macrotouch.master.http 'POST /api/macro-image'
+    macrotouch.master.http -> macrotouch.master.imageStore 'save(upload)'
+    macrotouch.master.imageStore -> macrotouch.master.imageStore 'check type and size, sanitize SVG, write original'
+    macrotouch.master.http <- macrotouch.master.imageStore 'id, size, animated'
+    macrotouch.editor.macroImages <- macrotouch.master.http 'id'
+    macrotouch.editor.imageCrop <- macrotouch.editor.macroImages 'uploaded image'
+
+    user -> macrotouch.editor.imageCrop 'crops, zooms, picks span and inset or fill'
+    macrotouch.editor.imageCrop -> macrotouch.editor.macroImages 'bake(id, span, crop)'
+    macrotouch.editor.macroImages -> macrotouch.master.http 'POST /api/macro-image/:id/bake'
+    macrotouch.master.http -> macrotouch.master.imageStore 'bake(id, span, crop)'
+    macrotouch.master.imageStore -> macrotouch.master.imageStore 'write baked WebP (animation kept) or SVG'
+    macrotouch.master.http <- macrotouch.master.imageStore 'rev, ext'
+    macrotouch.editor.macroImages <- macrotouch.master.http 'rev, ext'
+    macrotouch.editor.imageCrop <- macrotouch.editor.macroImages 'image: span, crop, mode, rev, ext'
+    macrotouch.editor.macroEditor <- macrotouch.editor.imageCrop 'image'
+
+    macrotouch.editor.macroEditor -> macrotouch.editor.store 'upsertMacro(icon with image)'
+    macrotouch.editor.store -> macrotouch.editor.ws 'send(commands)'
+    macrotouch.editor.ws -> macrotouch.master.gateway 'commands'
+    macrotouch.master.gateway -> macrotouch.master.store 'apply(command)'
+    macrotouch.master.store -> macrotouch.master.gateway 'change'
+    macrotouch.master.gateway -> macrotouch.controller.ws 'state-patch'
+    macrotouch.controller.ws -> macrotouch.controller.store 'message'
+
+    macrotouch.controller.cell -> macrotouch.master.http 'GET /macro-images/baked/<id>-<rev>.webp'
+    macrotouch.master.http -> macrotouch.master.imageStore 'readBaked(file)'
+    macrotouch.master.http <- macrotouch.master.imageStore 'file'
+    macrotouch.controller.cell <- macrotouch.master.http 'image (cached, never changes)'
+  }
+}

@@ -2,8 +2,13 @@
 model {
   extend macrotouch.master {
     http = service 'WebServer' {
-      description 'Serves web app pages to paired devices, sets the credential cookie when pairing completes, and gives out this computer\'s IP address'
+      description 'Serves web app pages and baked macro images to paired devices, serves original macro images to the editor only, sets the credential cookie when pairing completes, and gives out this computer\'s IP address'
       technology 'master-server/http.ts'
+    }
+
+    imageStore = service 'MacroImageStore' {
+      description 'Stores uploaded macro images, bakes a crop of one for a macro shape, and removes images no macro uses after a grace period'
+      technology 'master-server/macro-images.ts'
     }
 
     gateway = service 'SocketServer' {
@@ -82,6 +87,8 @@ model {
     watch -[call]-> gateway 'send(deviceId, watch-actions)'
     router -[call]-> store 'getMacro()'
     router -[call]-> actionServers 'get(deviceId), availability(actionId)'
+    http -[call]-> imageStore 'save(upload), bake(id, span, crop), readOriginal(id), readBaked(file)'
+    imageStore -[call]-> store 'image ids in use()'
     http -[call]-> pluginRegistry 'install(package), file(path)'
     gateway -[call]-> pluginRegistry 'sync(deviceId, installed)'
     pluginRegistry -[call]-> store 'apply(update-plugin, delete-plugin)'
@@ -105,6 +112,9 @@ model {
     technology 'fs'
   }
   macrotouch.master.deviceFile -[call]-> macrotouch.devicesFile 'read/write' {
+    technology 'fs'
+  }
+  macrotouch.master.imageStore -[call]-> macrotouch.macroImages 'read/write' {
     technology 'fs'
   }
 }

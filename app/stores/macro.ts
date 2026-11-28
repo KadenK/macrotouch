@@ -190,6 +190,7 @@ export const useMacroStore = defineStore('Macro', () => {
         },
         swipeToChangeScreens: state.settings.swipeToChangeScreens ?? DEFAULT_SETTINGS.swipeToChangeScreens,
         hideBlankButtons: state.settings.hideBlankButtons ?? DEFAULT_SETTINGS.hideBlankButtons,
+        buttonHaptics: state.settings.buttonHaptics ?? DEFAULT_SETTINGS.buttonHaptics,
         attemptFullscreen: state.settings.attemptFullscreen ?? DEFAULT_SETTINGS.attemptFullscreen,
         showEditorLabels: state.settings.showEditorLabels ?? DEFAULT_SETTINGS.showEditorLabels,
         showRemoteLabels: state.settings.showRemoteLabels ?? DEFAULT_SETTINGS.showRemoteLabels,

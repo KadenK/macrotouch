@@ -94,6 +94,16 @@ const action = defineAction({
   },
 })
 
+/** Windows virtual media keys. */
+const windowsMediaKeys: Record<string, number> = {
+  playpause: 0xb3,
+  nexttrack: 0xb0,
+  previoustrack: 0xb1,
+  volumeup: 0xaf,
+  volumedown: 0xae,
+  mute: 0xad,
+}
+
 async function execute(
   parameters: Parameters,
   ctx: PluginContext,
@@ -160,28 +170,14 @@ async function execute(
         throw new Error(`Unsupported media control: ${control}`)
     }
   } else if (platform === 'win32') {
-    switch (toLower) {
-      case 'playpause':
-        command = 'powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]0xB3)"'
-        break
-      case 'nexttrack':
-        command = 'powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]0xB0)"'
-        break
-      case 'previoustrack':
-        command = 'powershell -Command "(New-Object -ComObject WScript.Shell).SendKeys([char]0xB1)"'
-        break
-      case 'volumeup':
-        command = 'nircmd.exe changesysvolume 6553'
-        break
-      case 'volumedown':
-        command = 'nircmd.exe changesysvolume -6553'
-        break
-      case 'mute':
-        command = 'nircmd.exe mutesysvolume 2'
-        break
-      default:
-        throw new Error(`Unsupported media control: ${control}`)
-    }
+    const key = windowsMediaKeys[toLower]
+    if (key === undefined) throw new Error(`Unsupported media control: ${control}`)
+    await ctx.spawn('powershell', [
+      '-NoProfile',
+      '-Command',
+      `(New-Object -ComObject WScript.Shell).SendKeys([char]${key})`,
+    ])
+    return
   } else {
     throw new Error(`Unsupported platform: ${platform}`)
   }
@@ -193,24 +189,10 @@ async function execute(
   const tryCommands = async (commands: string[]) => {
     for (const cmd of commands) {
       try {
-        if (platform === 'win32' && cmd.startsWith('nircmd.exe ')) {
-          const [, ...args] = cmd.split(' ')
-          await ctx.spawn('nircmd.exe', args)
-        } else {
-          await ctx.exec(cmd)
-        }
+        await ctx.exec(cmd)
         return true
-      } catch (err) {
-        if (platform === 'win32' && cmd.startsWith('nircmd.exe')) {
-          const detail = err as { code?: string | number; stderr?: string }
-          if (
-            detail.code === 'ENOENT' ||
-            detail.code === 127 ||
-            /not recognized|not found/i.test(detail.stderr || '')
-          ) {
-            throw new Error('nircmd.exe is required for volume control', { cause: err })
-          }
-        }
+      } catch {
+        // Try the next command.
       }
     }
     return false

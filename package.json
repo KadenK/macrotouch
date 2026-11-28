@@ -27,7 +27,7 @@
     "docs": "likec4 start docs/architecture",
     "test:protocol": "node scripts/protocol-check.mjs",
     "test:ui": "node scripts/ui-check.mjs",
-    "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws",
+    "build:master": "esbuild master-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-master/index.mjs --external:ws --external:sharp --external:svgo",
     "build:action": "esbuild action-server/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist-action/index.mjs --external:ws --external:node-notifier",
     "start:master": "node dist-master/index.mjs",
     "start:action": "node dist-action/index.mjs",
@@ -35,6 +35,8 @@
   },
   "dependencies": {
     "node-notifier": "^12.1.0",
+    "sharp": "^0.35.5",
+    "svgo": "^4.1.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
@@ -71,6 +73,10 @@
   },
   "build": {
     "asar": false,
+    "asarUnpack": [
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/@img/**/*"
+    ],
     "appId": "com.macrotouch.app",
     "productName": "MacroTouch",
     "icon": "images/macrotouch-logo-512.png",

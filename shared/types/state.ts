@@ -11,6 +11,8 @@ export interface MacroSettings {
   defaultMacroBackgroundColor: Color
   swipeToChangeScreens: boolean
   hideBlankButtons: boolean
+  /** Vibrate phone on button press. */
+  buttonHaptics: boolean
   attemptFullscreen: boolean
   /** Show macro names under the buttons in the editor. */
   showEditorLabels: boolean
@@ -26,6 +28,7 @@ export function createDefaultSettings(): MacroSettings {
     defaultMacroBackgroundColor: { r: 255, g: 255, b: 255 },
     swipeToChangeScreens: true,
     hideBlankButtons: true,
+    buttonHaptics: true,
     attemptFullscreen: true,
     showEditorLabels: false,
     showRemoteLabels: false,

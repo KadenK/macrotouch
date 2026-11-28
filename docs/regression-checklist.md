@@ -386,15 +386,18 @@ separately and mark untested platforms as **not verified** rather than leaving t
 | AC-02 | Launch App — URL | `open` | `start ""` | `xdg-open` |
 | AC-03 | Launch App — application | `open -a "<path>.app"` | `start "" "<path>"` | spawn binary directly |
 | AC-04 | Send Notification | `terminal-notifier` | SnoreToast | `notify-send` |
-| AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys` | `xdotool`, falling back to `ydotool` |
+| AC-05 | Key Combo | `osascript` System Events | PowerShell `SendKeys`; `keybd_event` when the combo has the Windows key | `xdotool`, falling back to `ydotool` |
 | AC-06 | Type Text | `osascript` keystroke | PowerShell `SendKeys` | `xdotool type`, falling back to `ydotool type` |
-| AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell `SendKeys` / `nircmd` | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
+| AC-07 | Multimedia Control | `osascript` (Music/Spotify, else media keys) | PowerShell media keys (`SendKeys`), nothing to install | `playerctl`; volume via `wpctl` → `pactl` → `amixer` |
 | AC-10 | Open URL | `open` | `rundll32 url.dll,FileProtocolHandler` | `xdg-open` |
 | AC-11 | Open File or Folder | `open` | `explorer.exe` | `xdg-open` |
 | AC-12 | Set Clipboard | `pbcopy` | `clip` | `wl-copy` on Wayland, else `xclip` |
 
+
 **AC-01 — Shell Command.** A command with an observable side effect (e.g. writing a file) runs and
-produces that effect. An empty or missing command logs a warning and does nothing.
+produces that effect. An empty or missing command logs a warning and does nothing. Include a quoted
+argument, such as a file name with a space (`type nul > "mt check.txt"` on Windows,
+`touch "mt check.txt"` elsewhere): on Windows, quoted commands used to fail.
 ⚠ The command string is passed to the shell unquoted and unescaped — shell metacharacters in the
 field are interpreted. That is current behavior and the field is trusted input.
 
@@ -413,7 +416,8 @@ plain `npm run dev`). If the OS refuses it, the failure is logged as an error.
 **AC-05 — Key Combo.** Capture a combo (e.g. `cmd+c` / `ctrl+c`), trigger it, and confirm the
 receiving app saw the keystroke. Modifier aliases (`ctrl`/`control`, `cmd`/`command`/`meta`/`win`,
 `alt`/`option`) all resolve. Named keys (`enter`, `tab`, `space`, `backspace`, `delete`, `escape`,
-arrows) work as well as plain characters.
+arrows) work as well as plain characters. On Windows, also try a Windows-key combo such as `win+e`
+(opens File Explorer): it must press the Windows key, not type `#e`.
 ⚠ On macOS this requires Accessibility permission for the host app; without it the combo silently
 does nothing.
 
@@ -422,7 +426,8 @@ characters that are special to the underlying mechanism (`{`, `}`, `^`, `%`, `~`
 Same Accessibility caveat as AC-05.
 
 **AC-07 — Multimedia Control.** Each of `PlayPause`, `NextTrack`, `PreviousTrack`, `VolumeUp`,
-`VolumeDown`, `Mute` has its effect. Volume steps by 5% per trigger.
+`VolumeDown`, `Mute` has its effect. Volume steps by 5% per trigger on macOS and Linux. On Windows
+it presses the system volume key, so it steps by the OS amount (2%) and shows the volume overlay.
 ⚠ macOS `Mute` only mutes — repeating it does not unmute, unlike every other platform where mute
 toggles.
 ⚠ macOS prefers Music, then Spotify, and only sends media keys if neither is running, so the
@@ -477,16 +482,21 @@ already-connected devices (see RT-06/RT-09).
 **SE-09 — `Attempt to Fullscreen` is live.** Toggling it and saving changes runtime behavior on the
 next runtime page load.
 
-**SE-10 — Inert toggles.** ⚠ `Button haptics` is rendered but **not wired to anything**. It does not persist, does not survive a page
+~~**SE-10 — Inert toggles.** ⚠ `Button haptics` is rendered but **not wired to anything**. It does not persist, does not survive a page
 reload, and has no effect. This is current behavior, not a regression — do not implement them
-inside a MAC-11 ticket.
+inside a MAC-11 ticket.~~ Removed by [MAC-45](https://linear.app/macrotouch/issue/MAC-45): haptics is wired; SE-13 covers it.
 
 **SE-12 — `Start on boot` is live (desktop app only).** Toggling it registers or removes an OS login
 item (Linux: `~/.config/autostart/macrotouch.desktop`). At login the app starts hidden in the tray
 when the tray icon is enabled. The toggle reflects the OS state on launch. Not covered by `test:ui`.
 
-**SE-11 — Settings round-trip.** Save settings, restart the app, reopen Settings. The two working
-toggles, color and grid size are as saved.
+**SE-11 — Settings round-trip.** Save settings, restart the app, reopen Settings. The working
+toggles (including `Button haptics`), color and grid size are as saved.
+
+**SE-13 — `Button haptics` is live.** With the toggle on, pressing a macro on a paired Android
+phone gives a short vibration; with it off, there is none. The setting saves immediately, survives
+a restart, and reaches already-connected devices. iOS Safari has no vibration API, so nothing
+happens there either way. Persistence is covered by `test:ui`; the vibration itself is manual.
 
 ---
 
@@ -514,6 +524,56 @@ and passes ST-03, PA-06 and one action end to end.
 
 ---
 
+## J. Custom macro images (`IM`)
+
+**IM-01 — Upload each supported format.** In the macro editor, pick a PNG, JPEG, WebP, GIF and SVG
+file in turn. Each uploads, shows a preview in the crop dialog, and can be saved to a macro. The
+macro shows the image on the editor screen and on a connected remote.
+
+**IM-02 — Rejected file type.** Pick a file that is not one of the five formats (for example a
+`.bmp` or a `.txt` renamed to `.png`). The dialog shows an error, nothing is added to the macro,
+and the macro keeps its previous look.
+
+**IM-03 — Oversize file.** Pick an image larger than 10 MB. It is rejected with an error that
+names the size limit, and the macro is unchanged.
+
+**IM-04 — Animated GIF animates on the remote.** Use an animated GIF. The remote shows it moving
+at its original speed. The editor preview also animates.
+
+**IM-05 — SVG scripts are stripped.** Use an SVG that contains a `<script>` element and an
+`onload` attribute. It shows as a plain graphic in the editor and on the remote, and the script
+does not run (no alert, no network request, no console output from it).
+
+**IM-06 — Crop per span.** For several macro sizes (1x1, 1x2, 2x2, 3x1 and so on), crop and
+zoom the same image. The macro on the remote shows the same framing that the crop dialog showed for
+that size. Changing the size and re-cropping updates the framing.
+
+**IM-07 — Inset vs fill.** With **inset**, the whole cropped image sits inside the macro with
+padding around it. With **fill**, the image covers the macro edge to edge. In both modes the image
+is clipped to the macro's rounded corners.
+
+**IM-08 — Transparent pixels show the background colour.** Use a PNG or SVG with transparent
+areas and set a macro background colour. The transparent areas show that colour on the editor and
+on the remote.
+
+**IM-09 — Per-state images.** Give a macro one image for its normal state and another for its
+alternate state, then use its state switch. The remote shows the image that matches the current
+state, and switching back shows the first image again.
+
+**IM-10 — Image survives a restart.** Set images on at least two macros, quit the app fully and
+start it again. The editor and the remote show the same images as before, with no re-upload.
+
+**IM-11 — Remote cannot fetch originals.** From a paired remote, open the original file address
+for a macro image (`/macro-images/originals/<id>`). It is refused. The baked file address for the
+same image (`/macro-images/baked/...`) loads without a credential prompt, so the remote's
+own display works.
+
+**IM-12 — Unused images are removed after the grace period.** Upload an image, save it to a macro,
+then remove it from the macro. The image is still on disk right after the change. After the grace
+period has passed and the app has run its cleanup, the original and baked files are gone.
+
+---
+
 ## Appendix: quirk index
 
 Current behavior that is surprising, recorded so the refactor preserves it knowingly. Each needs a
@@ -537,4 +597,4 @@ deliberate decision — preserve, or a separate ticket — before the matching M
 | AC-05/06 | macOS needs Accessibility permission; without it, input actions fail silently |
 | AC-07 | macOS `Mute` does not toggle; behavior depends on Music/Spotify being open |
 | SE-03 | `Cancel` does not leave the Settings page |
-| SE-10 | The `Button haptics` toggle is decorative and does nothing |
+| ~~SE-10~~ | ~~The `Button haptics` toggle is decorative and does nothing~~ (fixed by MAC-45) |
